@@ -11,6 +11,8 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String ip = request.getRemoteAddr();
+        String endpoint = request.getRequestURI();
+        request.setAttribute("endpoint", endpoint);
         System.out.println("Request from IP: " + ip);
         return true;
     }
