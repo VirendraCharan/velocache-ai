@@ -15,8 +15,12 @@ public class TrafficTrackingInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        String tenantId = "tenant-a"; // hardcoded on purpose for now
+        String tenantId = request.getHeader("X-Tenant-Id");
+        if(tenantId == null) {
+            tenantId = "unknown-tenant";
+        }
         String endpoint = request.getRequestURI();
+
         trafficService.recordRequest(tenantId, endpoint);
         return true;
     }
