@@ -1,5 +1,6 @@
 package com.velocache.middleware.config;
 import com.velocache.middleware.interceptor.RateLimitInterceptor;
+import com.velocache.middleware.interceptor.TrafficTrackingInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -9,10 +10,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
     @Autowired
     private RateLimitInterceptor rateLimitInterceptor;
+    @Autowired
+    private TrafficTrackingInterceptor trafficTrackingInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(rateLimitInterceptor)
+                .excludePathPatterns("/api/health", "/error");
+        registry.addInterceptor(trafficTrackingInterceptor)
                 .excludePathPatterns("/api/health", "/error");
     }
 }
