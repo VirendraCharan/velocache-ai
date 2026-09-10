@@ -1,5 +1,6 @@
 package com.velocache.middleware.service;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,14 @@ import java.util.UUID;
 @Service
 public class TenantTrafficService {
     private static final long WINDOW_MS = 60_000; // 60 seconds
+    @Autowired
+    private MeterRegistry meterRegistry;
+    public void recordCacheHit() {
+        meterRegistry.counter("cache_hit_total").increment();
+    }
+    public void recordCacheMiss() {
+        meterRegistry.counter("cache_miss_total").increment();
+    }
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
     public void recordRequest(String tenantId, String endpoint) {
