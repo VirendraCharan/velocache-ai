@@ -25,7 +25,7 @@ public class TrafficTrackingInterceptor implements HandlerInterceptor {
             String token = authHeader.substring(7);
             try {
                 Claims claims = jwtUtil.validateAndParse(token);
-                tenantId = claims.get("tenantId", String.class);
+                tenantId = claims.get("tenant_id", String.class);
             } catch (Exception e) {
                 System.err.println("Invalid or expired JWT: " + e.getMessage());
             }
