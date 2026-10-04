@@ -3,8 +3,14 @@ package com.velocache.middleware.service;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -12,14 +18,18 @@ public class TenantTrafficService {
     private static final long WINDOW_MS = 60_000; // 60 seconds
     @Autowired
     private MeterRegistry meterRegistry;
+
     public void recordCacheHit() {
         meterRegistry.counter("cache_hit_total").increment();
     }
+
     public void recordCacheMiss() {
         meterRegistry.counter("cache_miss_total").increment();
     }
+
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
     public void recordRequest(String tenantId, String endpoint) {
         String key = "velocache:traffic:" + tenantId + ":" + endpoint;
         long now = System.currentTimeMillis();
@@ -32,5 +42,25 @@ public class TenantTrafficService {
             System.err.println("Traffic tracking failed for key" + ": " + e.getMessage());
         }
     }
-}
 
+    public Set<ZSetOperations.TypedTuple<Object>> getRecentEntries(String tenantId, String endpoint) {
+        String key = "velocache:traffic:" + tenantId + ":" + endpoint;
+        return redisTemplate.opsForZSet().rangeWithScores(key, 0, -1);
+    }
+
+    public Map<Integer, Integer> getCountsByMinute(String tenantId, String endpoint) {
+        Set<ZSetOperations.TypedTuple<Object>> entries = getRecentEntries(tenantId, endpoint);
+        Map<Integer, Integer> countsByMinute = new LinkedHashMap<>();
+
+        for (ZSetOperations.TypedTuple<Object> entry : entries) {
+            long timestampMs = entry.getScore().longValue();
+            LocalDateTime dt = LocalDateTime.ofInstant(
+                    java.time.Instant.ofEpochMilli(timestampMs), ZoneId.systemDefault());
+            int minuteOfDay = dt.getHour() * 60 + dt.getMinute();
+
+            countsByMinute.merge(minuteOfDay, 1, Integer::sum);
+        }
+
+        return countsByMinute;
+    }
+}
