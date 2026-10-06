@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 minutes = 100
 base_traffic = 20
@@ -19,7 +21,7 @@ df = pd.DataFrame({
     "request_count": request_counts
 })
 
-df.to_csv("traffic_data.csv", index=False)
+df.to_csv(os.path.join(SCRIPT_DIR, "traffic_data.csv"), index=False)
 
 
 
@@ -72,17 +74,17 @@ def run_forecast(csv_path, endpoint_name):
         "generated_at": datetime.now().isoformat()
     }
 
-    with open("forecast_output.json", "w") as f:
+    with open(os.path.join(SCRIPT_DIR, "forecast_output.json"), "w") as f:
         json.dump(result, f, indent=2)
 
     return result
 
 test_df = df[df["minute"] <= 22]  # cuts data off right after the minute-20 spike starts
-test_df.to_csv("test_data.csv", index=False)
-print(run_forecast("test_data.csv", "/traffic"))
+test_df.to_csv(os.path.join(SCRIPT_DIR, "test_data.csv"), index=False)
+print(run_forecast(os.path.join(SCRIPT_DIR, "test_data.csv"), "/traffic"))
 
 if __name__ == "__main__":
-    print(run_forecast("traffic_data.csv", "/traffic"))
+    print(run_forecast(os.path.join(SCRIPT_DIR, "tenant-a-export.csv"), "/traffic"))
 
 plt.plot(df["minute"], df["request_count"])
 plt.xlabel("Minute")

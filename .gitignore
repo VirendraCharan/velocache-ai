@@ -33,3 +33,8 @@ build/
 
 src/main/resources/application.properties
 tenant-a-export.csv
+
+forecaster/forecast_output.json
+
+forecaster/traffic_data.csv
+forecaster/test_data.csv

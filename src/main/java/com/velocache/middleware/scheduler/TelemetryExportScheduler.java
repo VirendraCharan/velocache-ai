@@ -18,7 +18,7 @@ public class TelemetryExportScheduler {
 
     @Scheduled(fixedDelay = 30000)
     public void checkIn() {
-      exportService.exportToCsv("tenant-a", "/api/track", "tenant-a-export.csv");
+      exportService.exportToCsv("tenant-a", "/api/track", "forecaster/tenant-a-export.csv");
       logger.info("Export written for tenant-a");
     }
 }
