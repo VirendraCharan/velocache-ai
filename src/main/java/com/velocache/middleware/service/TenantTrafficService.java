@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Service
 public class TenantTrafficService {
-    private static final long WINDOW_MS = 60_000; // 60 seconds
+    private static final long WINDOW_MS = 15 * 60_000; // 15 minutes
     @Autowired
     private MeterRegistry meterRegistry;
 
@@ -62,5 +62,8 @@ public class TenantTrafficService {
         }
 
         return countsByMinute;
+    }
+    public Set<String> getAllTrafficKeys() {
+        return redisTemplate.keys("velocache:traffic:*");
     }
 }

@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import glob
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 minutes = 100
@@ -44,37 +45,43 @@ def forecast_next(df, window_size=15, steps_ahead=5):
 import json
 from datetime import datetime
 
-def run_forecast(csv_path, endpoint_name):
+def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
+    if output_path is None:
+        output_path = os.path.join(SCRIPT_DIR, "forecast_output.json")
+
     df = pd.read_csv(csv_path)
 
     if len(df) < 5:
-        return {
+        result = {
+            "tenant_id": tenant_id,
             "endpoint": endpoint_name,
             "predicted_spike_at": None,
             "confidence": "low",
-            "reason": "insufficient_history"
+            "reason": "insufficient_history",
+            "generated_at": datetime.now().isoformat()
+        }
+    else:
+        future_minutes, predictions = forecast_next(df)
+
+        baseline = df["request_count"].tail(15).mean()
+        spike_threshold = baseline * 1.5
+
+        spike_minute = None
+        for minute, pred in zip(future_minutes, predictions):
+            if pred > spike_threshold:
+                spike_minute = int(minute)
+                break
+
+        result = {
+            "tenant_id": tenant_id,
+            "endpoint": endpoint_name,
+            "predicted_spike_at": spike_minute,
+            "confidence": "high" if spike_minute else "none",
+            "current_baseline": round(baseline, 1),
+            "generated_at": datetime.now().isoformat()
         }
 
-    future_minutes, predictions = forecast_next(df)
-
-    baseline = df["request_count"].tail(15).mean()
-    spike_threshold = baseline * 1.5
-
-    spike_minute = None
-    for minute, pred in zip(future_minutes, predictions):
-        if pred > spike_threshold:
-            spike_minute = int(minute)
-            break
-
-    result = {
-        "endpoint": endpoint_name,
-        "predicted_spike_at": spike_minute,
-        "confidence": "high" if spike_minute else "none",
-        "current_baseline": round(baseline, 1),
-        "generated_at": datetime.now().isoformat()
-    }
-
-    with open(os.path.join(SCRIPT_DIR, "forecast_output.json"), "w") as f:
+    with open(output_path, "w") as f:
         json.dump(result, f, indent=2)
 
     return result
@@ -83,12 +90,22 @@ test_df = df[df["minute"] <= 22]  # cuts data off right after the minute-20 spik
 test_df.to_csv(os.path.join(SCRIPT_DIR, "test_data.csv"), index=False)
 print(run_forecast(os.path.join(SCRIPT_DIR, "test_data.csv"), "/traffic"))
 
-if __name__ == "__main__":
-    print(run_forecast(os.path.join(SCRIPT_DIR, "tenant-a-export.csv"), "/traffic"))
+def run_all_exports():
+    pattern = os.path.join(SCRIPT_DIR, "*__*-export.csv")
+    for csv_path in glob.glob(pattern):
+        file_name = os.path.basename(csv_path)
+        base = file_name[:-len("-export.csv")]
+        tenant_id, safe_endpoint = base.split("__", 1)
+        endpoint = safe_endpoint.replace("~", "/")
 
+        output_path = os.path.join(SCRIPT_DIR, base + "-forecast.json")
+        result = run_forecast(csv_path, endpoint, tenant_id, output_path)
+        print(tenant_id, endpoint, result["confidence"], result["predicted_spike_at"])
+
+if __name__ == "__main__":
+    run_all_exports()
 plt.plot(df["minute"], df["request_count"])
 plt.xlabel("Minute")
 plt.ylabel("Request Count")
 plt.title("Synthetic VeloCache Traffic")
 plt.savefig("traffic_plot.png")
-plt.show()

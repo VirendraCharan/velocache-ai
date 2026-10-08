@@ -20,7 +20,7 @@ def send_traffic(tenant_id, token, endpoint):
 
 TENANTS = ["tenant-a", "tenant-b"]
 INTERVAL_SECONDS = 2
-DURATION_SECONDS = 120
+DURATION_SECONDS = 420
 SPIKE_SEND_INTERVAL_SECONDS = 0.3
 
 

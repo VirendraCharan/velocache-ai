@@ -38,3 +38,7 @@ forecaster/forecast_output.json
 
 forecaster/traffic_data.csv
 forecaster/test_data.csv
+
+forecaster/*-export.csv
+forecaster/*-forecast.json
+forecaster/*.tmp
