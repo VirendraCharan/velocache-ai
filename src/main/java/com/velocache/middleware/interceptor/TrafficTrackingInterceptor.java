@@ -31,6 +31,7 @@ public class TrafficTrackingInterceptor implements HandlerInterceptor {
             }
         }
         String endpoint = request.getRequestURI();
+        request.setAttribute("tenantId", tenantId);
         trafficService.recordRequest(tenantId, endpoint);
         return true;
     }
