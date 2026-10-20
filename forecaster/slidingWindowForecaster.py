@@ -43,7 +43,7 @@ def forecast_next(df, window_size=15, steps_ahead=5):
     return future_minutes.flatten(), predictions
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
     if output_path is None:
@@ -72,10 +72,15 @@ def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
                 spike_minute = int(minute)
                 break
 
+            
+        spike_at = None
+        if spike_minute is not None:
+            midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            spike_at = (midnight + timedelta(minutes=spike_minute)).isoformat()
         result = {
             "tenant_id": tenant_id,
             "endpoint": endpoint_name,
-            "predicted_spike_at": spike_minute,
+            "predicted_spike_at": spike_at,
             "confidence": "high" if spike_minute else "none",
             "current_baseline": round(baseline, 1),
             "generated_at": datetime.now().isoformat()
