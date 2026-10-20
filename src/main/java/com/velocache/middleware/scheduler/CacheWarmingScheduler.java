@@ -10,6 +10,8 @@ import tools.jackson.databind.ObjectMapper;
 import com.velocache.middleware.service.CacheKeyBuilder;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
+import com.velocache.middleware.service.OriginService;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.io.File;
 import java.time.LocalDateTime;
@@ -25,8 +27,13 @@ public class CacheWarmingScheduler {
     private static final Logger logger = LoggerFactory.getLogger(CacheWarmingScheduler.class);
     private static final int HORIZON_MINUTES = 10;
     private static final int STALE_MINUTES = 15;
+    @Value("${velocache.warming.enabled:true}")
+    private boolean warmingEnabled;
     @Scheduled(fixedDelay = 30000)
     public void warmCache() {
+        if (!warmingEnabled) {
+            return;
+        }
         logger.info("checking forecast...");
 
         File folder = new File("forecaster");
@@ -66,8 +73,10 @@ public class CacheWarmingScheduler {
     }
     private void warm(String tenantId, String endpoint) {
         String key = cacheKeyBuilder.build(tenantId, endpoint);
-        String value = "warmed-at-" + LocalDateTime.now();
+        String value = originService.fetch(tenantId, endpoint);
         stringRedisTemplate.opsForValue().set(key, value, Duration.ofMinutes(10));
         logger.info("WARMED key={}", key);
     }
+    @Autowired
+    private OriginService originService;
 }
