@@ -45,6 +45,27 @@ def forecast_next(df, window_size=15, steps_ahead=5):
 import json
 from datetime import datetime, timedelta
 
+def find_next_rush(df):
+    counts = df["request_count"]
+    if len(df) < 5 or counts.max() < 1.5 * counts.min():
+        return None
+
+    peak_level = counts.max() * 0.8
+    peak_minutes = df[counts >= peak_level]["minute"].tolist()
+
+    rush_starts = []
+    previous = None
+    for minute in peak_minutes:
+        if previous is None or minute - previous > 1:
+            rush_starts.append(minute)
+        previous = minute
+
+    if len(rush_starts) < 2:
+        return None
+
+    interval = rush_starts[-1] - rush_starts[-2]
+    return int(rush_starts[-1] + interval)
+
 def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
     if output_path is None:
         output_path = os.path.join(SCRIPT_DIR, "forecast_output.json")
@@ -61,27 +82,27 @@ def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
             "generated_at": datetime.now().isoformat()
         }
     else:
-        future_minutes, predictions = forecast_next(df)
-
         baseline = df["request_count"].tail(15).mean()
-        spike_threshold = baseline * 1.5
+        spike_minute = find_next_rush(df)
 
-        spike_minute = None
-        for minute, pred in zip(future_minutes, predictions):
-            if pred > spike_threshold:
-                spike_minute = int(minute)
-                break
+        if spike_minute is None:
+            future_minutes, predictions = forecast_next(df)
+            spike_threshold = baseline * 1.5
+            for minute, pred in zip(future_minutes, predictions):
+                if pred > spike_threshold:
+                    spike_minute = int(minute)
+                    break
 
-            
         spike_at = None
         if spike_minute is not None:
             midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             spike_at = (midnight + timedelta(minutes=spike_minute)).isoformat()
+
         result = {
             "tenant_id": tenant_id,
             "endpoint": endpoint_name,
             "predicted_spike_at": spike_at,
-            "confidence": "high" if spike_minute else "none",
+            "confidence": "high" if spike_minute is not None else "none",
             "current_baseline": round(baseline, 1),
             "generated_at": datetime.now().isoformat()
         }
