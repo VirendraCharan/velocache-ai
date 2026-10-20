@@ -10,8 +10,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
-
 @RestController
 public class DataController {
     @Autowired
@@ -36,7 +34,7 @@ public class DataController {
 
         trafficService.recordCacheMiss();
         String value = originService.fetch(tenantId, endpoint);
-        stringRedisTemplate.opsForValue().set(key, value, Duration.ofMinutes(10));
+        stringRedisTemplate.opsForValue().set(key, value,CacheKeyBuilder.SHELF_LIFE);
         return value;
     }
 }

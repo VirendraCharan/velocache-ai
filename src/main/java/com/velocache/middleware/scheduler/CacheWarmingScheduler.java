@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import com.velocache.middleware.service.CacheKeyBuilder;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import java.time.Duration;
 import com.velocache.middleware.service.OriginService;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -74,7 +73,7 @@ public class CacheWarmingScheduler {
     private void warm(String tenantId, String endpoint) {
         String key = cacheKeyBuilder.build(tenantId, endpoint);
         String value = originService.fetch(tenantId, endpoint);
-        stringRedisTemplate.opsForValue().set(key, value, Duration.ofMinutes(10));
+        stringRedisTemplate.opsForValue().set(key, value, CacheKeyBuilder.SHELF_LIFE);
         logger.info("WARMED key={}", key);
     }
     @Autowired
