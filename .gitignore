@@ -42,3 +42,5 @@ forecaster/test_data.csv
 forecaster/*-export.csv
 forecaster/*-forecast.json
 forecaster/*.tmp
+
+__pycache__/
