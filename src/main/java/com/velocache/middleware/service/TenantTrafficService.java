@@ -19,14 +19,13 @@ public class TenantTrafficService {
     @Autowired
     private MeterRegistry meterRegistry;
 
-    public void recordCacheHit() {
-        meterRegistry.counter("cache_hit_total").increment();
+    public void recordCacheHit(String tenantId) {
+        meterRegistry.counter("cache_hit_total", "tenant", tenantId).increment();
     }
 
-    public void recordCacheMiss() {
-        meterRegistry.counter("cache_miss_total").increment();
+    public void recordCacheMiss(String tenantId) {
+        meterRegistry.counter("cache_miss_total", "tenant", tenantId).increment();
     }
-
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 

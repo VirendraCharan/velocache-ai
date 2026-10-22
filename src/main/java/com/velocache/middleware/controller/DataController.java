@@ -28,11 +28,11 @@ public class DataController {
 
         String cached = stringRedisTemplate.opsForValue().get(key);
         if (cached != null) {
-            trafficService.recordCacheHit();
+            trafficService.recordCacheHit(tenantId);
             return cached;
         }
 
-        trafficService.recordCacheMiss();
+        trafficService.recordCacheMiss(tenantId);
         String value = originService.fetch(tenantId, endpoint);
         stringRedisTemplate.opsForValue().set(key, value,CacheKeyBuilder.SHELF_LIFE);
         return value;
