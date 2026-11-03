@@ -16,7 +16,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(trafficTrackingInterceptor)
-                .excludePathPatterns("/api/health", "/error", "/api/dev/token");
+                .excludePathPatterns("/api/health", "/error", "/api/dev/token", "/api/dashboard/**");
         registry.addInterceptor(rateLimitInterceptor)
                 .excludePathPatterns("/api/health", "/error", "/api/dev/token");
     }
