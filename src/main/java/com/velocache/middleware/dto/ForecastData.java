@@ -14,7 +14,7 @@ public class ForecastData {
     private String predictedSpikeAt;
     private String confidence;
     @JsonProperty("current_baseline")
-    private String currentBaseline;
+    private Double currentBaseline;
     @JsonProperty("generated_at")
     private String generatedAt;
     private String reason;

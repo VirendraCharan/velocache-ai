@@ -7,5 +7,5 @@ import lombok.Data;
 @AllArgsConstructor
 public class TrafficPointDto {
     private String minute;
-    private int actual;
+    private Integer actual;;
 }

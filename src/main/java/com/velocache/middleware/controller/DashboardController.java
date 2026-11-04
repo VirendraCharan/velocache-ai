@@ -1,6 +1,7 @@
 package com.velocache.middleware.controller;
 
 import com.velocache.middleware.dto.CacheStatsDto;
+import com.velocache.middleware.dto.ForecastOverlayDto;
 import com.velocache.middleware.dto.TrafficPointDto;
 import com.velocache.middleware.service.DashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,5 +28,12 @@ public class DashboardController {
             @RequestParam String endpoint,
             @RequestParam(defaultValue = "15") int minutes) {
         return dashboardService.getTrafficSeries(tenantId, endpoint, minutes);
+    }
+    @GetMapping("/forecast-overlay")
+    public ForecastOverlayDto getOverlay(
+            @RequestParam String tenantId,
+            @RequestParam String endpoint,
+            @RequestParam(defaultValue = "15") int minutes) {
+        return dashboardService.getOverlay(tenantId, endpoint, minutes);
     }
 }
