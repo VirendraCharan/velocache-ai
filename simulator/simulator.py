@@ -1,8 +1,8 @@
 import requests
 import time
 import sys
-
-DEV_SECRET = "velocache-local-dev-7391"
+import os
+DEV_SECRET = os.environ["VELOCACHE_DEV_SECRET"]
 LABEL = sys.argv[1] if len(sys.argv) > 1 else "run"
 
 def get_token(tenant_id):
