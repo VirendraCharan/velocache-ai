@@ -1,6 +1,7 @@
 package com.velocache.middleware.scheduler;
 
 import com.velocache.middleware.dto.ForecastData;
+import com.velocache.middleware.service.WarmingEventLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,8 @@ public class CacheWarmingScheduler {
     private ObjectMapper objectMapper;
     @Autowired
     private CacheKeyBuilder cacheKeyBuilder;
+    @Autowired
+    private WarmingEventLog warmingEventLog;
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
     private static final Logger logger = LoggerFactory.getLogger(CacheWarmingScheduler.class);
@@ -75,6 +78,7 @@ public class CacheWarmingScheduler {
         String value = originService.fetch(tenantId, endpoint);
         stringRedisTemplate.opsForValue().set(key, value, CacheKeyBuilder.SHELF_LIFE);
         logger.info("WARMED key={}", key);
+        warmingEventLog.record(tenantId, endpoint, "predicted");
     }
     @Autowired
     private OriginService originService;
