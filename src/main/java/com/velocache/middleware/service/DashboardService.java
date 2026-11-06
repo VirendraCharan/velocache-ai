@@ -72,8 +72,12 @@ public class DashboardService {
             String status = generatedAt.isBefore(LocalDateTime.now().minusMinutes(15)) ? "stale" : "ok";
             String minute = null;
             if ("ok".equals(status) && forecast.getPredictedSpikeAt() != null) {
-                minute = LocalDateTime.parse(forecast.getPredictedSpikeAt())
-                        .format(DateTimeFormatter.ofPattern("HH:mm"));
+                try {
+                    minute = LocalDateTime.parse(forecast.getPredictedSpikeAt())
+                            .format(DateTimeFormatter.ofPattern("HH:mm"));
+                } catch (Exception e) {
+                    minute = null;
+                }
             }
             return new ForecastStatusDto(status, forecast.getConfidence(), minute, forecast.getCurrentBaseline());
         } catch (Exception e) {
