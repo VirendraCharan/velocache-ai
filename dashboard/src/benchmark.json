@@ -1,0 +1,5 @@
+{
+  "off": { "misses": 3, "slowCalls": 3, "hitRate": "99.3%", "maxMs": 294, "p99Ms": 57 },
+  "on": { "misses": 2, "slowCalls": 2, "hitRate": "99.5%", "maxMs": 279, "p99Ms": 57 },
+  "note": "One 15-minute simulated run per setting, one tenant, simulated 200 ms origin. Warming avoided one of three cold-start misses; p99 did not change (with about 3 slow calls in 417, it cannot). These numbers will be replaced after the benchmark is redesigned."
+}

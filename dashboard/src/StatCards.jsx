@@ -1,5 +1,6 @@
 export default function StatCards({ stats }) {
-    const hitRate = (stats.hitRate * 100).toFixed(1) + '%';
+    const noTraffic = stats.hits + stats.misses === 0;
+    const hitRate = noTraffic ? '—' : (stats.hitRate * 100).toFixed(1) + '%';
     return (
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', margin: '16px 0' }}>
             <Card label="Cache hits" value={stats.hits} />
