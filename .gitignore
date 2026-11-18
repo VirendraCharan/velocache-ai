@@ -44,3 +44,4 @@ forecaster/*-forecast.json
 forecaster/*.tmp
 
 __pycache__/
+simulator/results/

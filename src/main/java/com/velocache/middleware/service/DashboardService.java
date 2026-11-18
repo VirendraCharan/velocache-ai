@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.File;
@@ -34,6 +35,18 @@ public class DashboardService {
         long total = hits + misses;
         double hitRate = total == 0 ? 0 : (double) hits / total;
         return new CacheStatsDto(tenantId, hits, misses, hitRate);
+    }
+
+    public JsonNode getBenchmark() {
+        File file = new File("simulator/results/benchmark-latest.json");
+        if (!file.exists()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(file);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public List<TrafficPointDto> getTrafficSeries(String tenantId, String endpoint, int minutes) {

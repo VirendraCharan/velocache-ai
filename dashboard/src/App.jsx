@@ -111,7 +111,7 @@ export default function App() {
                                 </section>
                             )
                         )}
-                        <BenchmarkCard />
+                        <BenchmarkCard opsKey={opsKey} />
                     </div>
                 </>
             )}

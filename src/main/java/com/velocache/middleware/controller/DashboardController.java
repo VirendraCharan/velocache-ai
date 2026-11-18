@@ -8,6 +8,7 @@ import com.velocache.middleware.scheduler.CacheWarmingScheduler;
 import com.velocache.middleware.service.DashboardService;
 import com.velocache.middleware.service.WarmingEventLog;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import tools.jackson.databind.JsonNode;
 
 @RestController
 @RequestMapping("/api/dashboard")
@@ -28,6 +30,13 @@ public class DashboardController {
     @GetMapping("/cache-stats")
     public CacheStatsDto getCacheStats(@RequestParam String tenantId ) {
         return dashboardService.getCacheStats(tenantId);
+    }
+    @GetMapping("/benchmark")
+    public ResponseEntity<JsonNode> getBenchmark() {
+        JsonNode benchmark = dashboardService.getBenchmark();
+        return benchmark == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(benchmark);
     }
     @GetMapping("/traffic-series")
     public List<TrafficPointDto> getTrafficSeries(
