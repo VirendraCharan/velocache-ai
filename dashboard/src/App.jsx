@@ -6,18 +6,35 @@ import TrafficChart from './TrafficChart';
 import BenchmarkCard from './BenchmarkCard';
 import SimulateButton from './SimulateButton';
 import KillRedisButton from './KillRedisButton';
+import { fetchPublic } from './api';
 import './App.css';
 
 const TENANTS = ['tenant-a', 'tenant-b'];
 const DEMO_TENANTS = ['demo-a', 'demo-b'];
+const AUTOMATED_TENANT = 'demo-rhythm';
 
 export default function App() {
     const [opsKey, setOpsKey] = useState('');
     const [draftKey, setDraftKey] = useState('');
     const [tenantId, setTenantId] = useState(DEMO_TENANTS[0]);
     const [showLogin, setShowLogin] = useState(false);
+    const [demoTenants, setDemoTenants] = useState(DEMO_TENANTS);
     const { data, error } = useDashboardData(tenantId, opsKey);
     const [lastUpdated, setLastUpdated] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchPublic('tenants', {})
+            .then((list) => {
+                if (!cancelled && Array.isArray(list) && list.length > 0) {
+                    setDemoTenants(list);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         if (data) setLastUpdated(new Date());
@@ -82,7 +99,7 @@ export default function App() {
                                 <span>Last updated</span>
                                 <time>{updatedLabel}</time>
                             </div>
-                            <TenantSelector tenants={opsKey ? TENANTS : DEMO_TENANTS} value={tenantId} onChange={setTenantId} />
+                            <TenantSelector tenants={opsKey ? TENANTS : demoTenants} value={tenantId} onChange={setTenantId} />
                             {opsKey ? (
                                 <button
                                     className="disconnect-button"
@@ -115,8 +132,16 @@ export default function App() {
                                 </div>
                             </section>
                         )}
-                        {!opsKey && <SimulateButton tenantId={tenantId} />}
-                        {!opsKey && <KillRedisButton tenantId={tenantId} />}
+                        {!opsKey && (tenantId === AUTOMATED_TENANT ? (
+                            <section className="state-card glass-card">
+                                <p>Automated demo traffic (simulated): a burst every 5 minutes.</p>
+                            </section>
+                        ) : (
+                            <>
+                                <SimulateButton tenantId={tenantId} />
+                                <KillRedisButton tenantId={tenantId} />
+                            </>
+                        ))}
                         {data ? (
                             <>
                                 <div className="section-heading">

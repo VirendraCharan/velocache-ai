@@ -51,11 +51,11 @@ export default function BenchmarkCard({ opsKey }) {
             ) : error ? (
                 <p>
                     {error === 'Server answered 404'
-                        ? 'No benchmark run yet. Run simulator\\run_benchmark.py to create one.'
+                        ? (opsKey ? 'No benchmark run yet. Run simulator\\run_benchmark.py to create one.' : 'No benchmark results published yet.')
                         : 'Could not load benchmark: ' + error}
                 </p>
             ) : !benchmark || !benchmark.off || !benchmark.on ? (
-                <p>No benchmark run yet. Run simulator\run_benchmark.py to create one.</p>
+                <p>{opsKey ? 'No benchmark run yet. Run simulator\\run_benchmark.py to create one.' : 'No benchmark results published yet.'}</p>
             ) : (
                 <>
                     <div className="benchmark-table" role="table" aria-label="Warming benchmark comparison">
