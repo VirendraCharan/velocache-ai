@@ -16,6 +16,7 @@ public class TrafficLog {
     private String endpoint;
     private int requestCount;
     private LocalDateTime recordedAt;
+    private String tenantId;
 
     // getters and setters
     public Long getId() { return id; }
@@ -29,4 +30,7 @@ public class TrafficLog {
 
     public LocalDateTime getRecordedAt() { return recordedAt; }
     public void setRecordedAt(LocalDateTime recordedAt) { this.recordedAt = recordedAt; }
+
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
 }
