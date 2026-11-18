@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.io.File;
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class CacheWarmingScheduler {
@@ -27,8 +29,9 @@ public class CacheWarmingScheduler {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
     private static final Logger logger = LoggerFactory.getLogger(CacheWarmingScheduler.class);
-    private static final int HORIZON_MINUTES = 10;
+    private static final int WARM_LEAD_SECONDS = 60;
     private static final int STALE_MINUTES = 15;
+    private final Map<String, LocalDateTime> warmedForecasts = new ConcurrentHashMap<>();
     @Value("${velocache.warming.enabled:true}")
     private boolean warmingEnabled;
     @Scheduled(fixedDelay = 30000)
@@ -36,6 +39,8 @@ public class CacheWarmingScheduler {
         if (!warmingEnabled) {
             return;
         }
+        LocalDateTime cleanupBefore = LocalDateTime.now().minusMinutes(2);
+        warmedForecasts.entrySet().removeIf(entry -> entry.getValue().isBefore(cleanupBefore));
         logger.info("checking forecast...");
 
         File folder = new File("forecaster");
@@ -45,6 +50,7 @@ public class CacheWarmingScheduler {
         }
 
         for (File file : files) {
+            String warmMapKey = null;
             try {
                 ForecastData forecast = objectMapper.readValue(file, ForecastData.class);
                 logger.info("Read forecast: tenant={} endpoint={} spike={} confidence={}",
@@ -63,12 +69,20 @@ public class CacheWarmingScheduler {
                 }
                 LocalDateTime spikeAt = LocalDateTime.parse(forecast.getPredictedSpikeAt());
                 LocalDateTime now = LocalDateTime.now();
-                if (spikeAt.isAfter(now) && spikeAt.isBefore(now.plusMinutes(HORIZON_MINUTES))) {
+                if (spikeAt.isAfter(now) && !spikeAt.isAfter(now.plusSeconds(WARM_LEAD_SECONDS))) {
+                    String mapKey = forecast.getTenantId() + "|" + forecast.getEndpoint() + "|" + forecast.getPredictedSpikeAt();
+                    if (warmedForecasts.putIfAbsent(mapKey, spikeAt) != null) {
+                        continue;
+                    }
+                    warmMapKey = mapKey;
                     logger.info("SPIKE SOON: tenant={} endpoint={} at {}",
                             forecast.getTenantId(), forecast.getEndpoint(), spikeAt);
                     warm(forecast.getTenantId(), forecast.getEndpoint());
                 }
             } catch (Exception e) {
+                if (warmMapKey != null) {
+                    warmedForecasts.remove(warmMapKey);
+                }
                 logger.warn("Could not read {}: {}", file.getName(), e.getMessage());
             }
         }
