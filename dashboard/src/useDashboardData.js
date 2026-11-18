@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchDashboard } from './api';
+import { fetchDashboard, fetchPublic } from './api';
 
 const POLL_MS = 3000;
 const ENDPOINT = '/api/data';
@@ -9,18 +9,21 @@ export function useDashboardData(tenantId, opsKey) {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (!opsKey) {
-            return;
-        }
         let cancelled = false;
 
         async function load() {
             try {
-                const [overlay, stats, events] = await Promise.all([
-                    fetchDashboard('forecast-overlay', { tenantId, endpoint: ENDPOINT, minutes: 15 }, opsKey),
-                    fetchDashboard('cache-stats', { tenantId }, opsKey),
-                    fetchDashboard('warming-events', { tenantId, limit: 20 }, opsKey),
-                ]);
+                const [overlay, stats, events] = opsKey
+                    ? await Promise.all([
+                        fetchDashboard('forecast-overlay', { tenantId, endpoint: ENDPOINT, minutes: 15 }, opsKey),
+                        fetchDashboard('cache-stats', { tenantId }, opsKey),
+                        fetchDashboard('warming-events', { tenantId, limit: 20 }, opsKey),
+                    ])
+                    : await Promise.all([
+                        fetchPublic('forecast-overlay', { tenantId, minutes: 15 }),
+                        fetchPublic('cache-stats', { tenantId }),
+                        fetchPublic('warming-events', { tenantId, limit: 20 }),
+                    ]);
                 if (!cancelled) {
                     setData({ tenantId, overlay, stats, events });
                     setError(null);

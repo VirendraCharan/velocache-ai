@@ -14,3 +14,15 @@ export async function fetchDashboard(path, params, opsKey) {
     }
     return response.json();
 }
+
+export async function fetchPublic(path, params) {
+    const url = new URL('/api/public/' + path, API_BASE);
+    for (const [name, value] of Object.entries(params)) {
+        url.searchParams.set(name, value);
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error('Server answered ' + response.status);
+    }
+    return response.json();
+}

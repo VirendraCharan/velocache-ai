@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchDashboard } from './api';
+import { fetchDashboard, fetchPublic } from './api';
 
 const ROWS = [
     ['Cache misses', 'misses'],
@@ -19,7 +19,9 @@ export default function BenchmarkCard({ opsKey }) {
         setLoading(true);
         setError('');
 
-        fetchDashboard('benchmark', {}, opsKey)
+        (opsKey
+            ? fetchDashboard('benchmark', {}, opsKey)
+            : fetchPublic('benchmark', {}))
             .then((data) => {
                 if (!cancelled) setBenchmark(data);
             })

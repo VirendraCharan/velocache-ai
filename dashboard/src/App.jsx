@@ -7,11 +7,13 @@ import BenchmarkCard from './BenchmarkCard';
 import './App.css';
 
 const TENANTS = ['tenant-a', 'tenant-b'];
+const DEMO_TENANTS = ['demo-a', 'demo-b'];
 
 export default function App() {
     const [opsKey, setOpsKey] = useState('');
     const [draftKey, setDraftKey] = useState('');
-    const [tenantId, setTenantId] = useState(TENANTS[0]);
+    const [tenantId, setTenantId] = useState(DEMO_TENANTS[0]);
+    const [showLogin, setShowLogin] = useState(false);
     const { data, error } = useDashboardData(tenantId, opsKey);
     const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -25,7 +27,7 @@ export default function App() {
 
     return (
         <main className="dashboard-shell">
-            {!opsKey ? (
+            {!opsKey && showLogin ? (
                 <section className="login-panel glass-card">
                     <div className="brand-mark">VC</div>
                     <div>
@@ -38,6 +40,8 @@ export default function App() {
                             e.preventDefault();
                             setOpsKey(draftKey);
                             setDraftKey('');
+                            setTenantId(TENANTS[0]);
+                            setShowLogin(false);
                         }}
                     >
                         <label htmlFor="ops-key">Ops key</label>
@@ -53,6 +57,13 @@ export default function App() {
                             Connect
                         </button>
                     </form>
+                    <button
+                        type="button"
+                        className="disconnect-button"
+                        onClick={() => setShowLogin(false)}
+                    >
+                        Back to demo
+                    </button>
                 </section>
             ) : (
                 <>
@@ -69,8 +80,26 @@ export default function App() {
                                 <span>Last updated</span>
                                 <time>{updatedLabel}</time>
                             </div>
-                            <TenantSelector tenants={TENANTS} value={tenantId} onChange={setTenantId} />
-                            <button className="disconnect-button" onClick={() => setOpsKey('')}>Disconnect</button>
+                            <TenantSelector tenants={opsKey ? TENANTS : DEMO_TENANTS} value={tenantId} onChange={setTenantId} />
+                            {opsKey ? (
+                                <button
+                                    className="disconnect-button"
+                                    onClick={() => {
+                                        setOpsKey('');
+                                        setTenantId(DEMO_TENANTS[0]);
+                                        setShowLogin(false);
+                                    }}
+                                >
+                                    Disconnect
+                                </button>
+                            ) : (
+                                <button
+                                    className="disconnect-button"
+                                    onClick={() => setShowLogin(true)}
+                                >
+                                    Staff login
+                                </button>
+                            )}
                         </div>
                     </header>
 
@@ -91,7 +120,7 @@ export default function App() {
                                         <p className="eyebrow">Overview</p>
                                         <h2>{tenantId}</h2>
                                     </div>
-                                    <span className="environment-badge">Production</span>
+                                    <span className="environment-badge">{opsKey ? 'Production' : 'Public demo'}</span>
                                 </div>
                                 <StatCards stats={data.stats} />
                                 <TrafficChart
