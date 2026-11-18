@@ -4,11 +4,13 @@ import com.velocache.middleware.dto.CacheStatsDto;
 import com.velocache.middleware.dto.ForecastOverlayDto;
 import com.velocache.middleware.dto.WarmingEventDto;
 import com.velocache.middleware.service.DashboardService;
+import com.velocache.middleware.service.DemoSimulationService;
 import com.velocache.middleware.service.WarmingEventLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +18,7 @@ import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 // Everything under /api/public is readable without a key, so it must never expose tenant-specific data except through an explicit allow-list of demo tenants.
 @RestController
@@ -31,6 +34,9 @@ public class PublicDemoController {
 
     @Autowired
     private WarmingEventLog warmingEventLog;
+
+    @Autowired
+    private DemoSimulationService demoSimulationService;
 
     private boolean isDemoTenant(String tenantId) {
         if (tenantId == null || tenantId.trim().isEmpty()) {
@@ -96,5 +102,17 @@ public class PublicDemoController {
         return benchmark == null
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.ok(benchmark);
+    }
+
+    @PostMapping("/simulate")
+    public ResponseEntity<Map<String, String>> simulate(@RequestParam String tenantId) {
+        if (!isDemoTenant(tenantId)) {
+            return ResponseEntity.notFound().build();
+        }
+        return switch (demoSimulationService.start(tenantId)) {
+            case STARTED -> ResponseEntity.status(202).body(Map.of("status", "started"));
+            case COOLING_DOWN -> ResponseEntity.status(429).body(Map.of("status", "cooling-down"));
+            case BUSY -> ResponseEntity.status(429).body(Map.of("status", "busy"));
+        };
     }
 }

@@ -36,7 +36,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .maxAge(3600);
         registry.addMapping("/api/public/**")
                 .allowedOrigins(allowedOrigin)
-                .allowedMethods("GET")
+                .allowedMethods("GET", "POST")
                 .maxAge(3600);
     }
 }
