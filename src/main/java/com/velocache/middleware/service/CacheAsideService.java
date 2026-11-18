@@ -2,10 +2,14 @@ package com.velocache.middleware.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class CacheAsideService {
+    private static final Logger logger = LoggerFactory.getLogger(CacheAsideService.class);
+
     @Autowired
     private CacheKeyBuilder cacheKeyBuilder;
     @Autowired
@@ -18,7 +22,14 @@ public class CacheAsideService {
     public String getOrLoad(String tenantId, String endpoint) {
         String key = cacheKeyBuilder.build(tenantId, endpoint);
 
-        String cached = stringRedisTemplate.opsForValue().get(key);
+        String cached;
+        try {
+            cached = stringRedisTemplate.opsForValue().get(key);
+        } catch (RuntimeException exception) {
+            logger.warn("Redis cache read failed: {}", exception.getClass().getName());
+            cached = null;
+        }
+
         if (cached != null) {
             trafficService.recordCacheHit(tenantId);
             return cached;
@@ -26,7 +37,13 @@ public class CacheAsideService {
 
         trafficService.recordCacheMiss(tenantId);
         String value = originService.fetch(tenantId, endpoint);
-        stringRedisTemplate.opsForValue().set(key, value, CacheKeyBuilder.SHELF_LIFE);
+        if (cached == null) {
+            try {
+                stringRedisTemplate.opsForValue().set(key, value, CacheKeyBuilder.SHELF_LIFE);
+            } catch (RuntimeException exception) {
+                logger.warn("Redis cache write failed: {}", exception.getClass().getName());
+            }
+        }
         return value;
     }
 }
