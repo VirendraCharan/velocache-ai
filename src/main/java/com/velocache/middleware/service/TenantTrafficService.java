@@ -43,9 +43,8 @@ public class TenantTrafficService {
         try {
             redisTemplate.opsForZSet().add(key, UUID.randomUUID().toString(), now);
             redisTemplate.opsForZSet().removeRangeByScore(key, 0, now - WINDOW_MS);
-            System.out.println("Recorded request in Redis for key: " + key);
         } catch (Exception e) {
-            System.err.println("Traffic tracking failed for key" + ": " + e.getMessage());
+            logger.warn("Traffic tracking failed ({})", e.getClass().getName());
         }
     }
 

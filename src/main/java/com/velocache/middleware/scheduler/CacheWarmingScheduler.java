@@ -31,6 +31,7 @@ public class CacheWarmingScheduler {
     private static final Logger logger = LoggerFactory.getLogger(CacheWarmingScheduler.class);
     private static final int WARM_LEAD_SECONDS = 60;
     private static final int STALE_MINUTES = 15;
+    private static final String CACHEABLE_ENDPOINT = "/api/data";
     private final Map<String, LocalDateTime> warmedForecasts = new ConcurrentHashMap<>();
     @Value("${velocache.warming.enabled:true}")
     private volatile boolean warmingEnabled;
@@ -67,6 +68,9 @@ public class CacheWarmingScheduler {
                         forecast.getTenantId(), forecast.getEndpoint(),
                         forecast.getPredictedSpikeAt(), forecast.getConfidence());
                 if (!"high".equals(forecast.getConfidence())) {
+                    continue;
+                }
+                if (!CACHEABLE_ENDPOINT.equals(forecast.getEndpoint())) {
                     continue;
                 }
                 LocalDateTime generatedAt = LocalDateTime.parse(forecast.getGeneratedAt());
