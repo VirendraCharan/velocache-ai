@@ -22,7 +22,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(trafficTrackingInterceptor)
-                .excludePathPatterns("/api/health", "/error", "/api/dev/token", "/api/dashboard/**");
+                .excludePathPatterns("/api/health", "/error", "/api/dev/token", "/api/dashboard/**", "/api/public/**");
         registry.addInterceptor(rateLimitInterceptor)
                 .excludePathPatterns("/api/health", "/error", "/api/dev/token");
         registry.addInterceptor(opsKeyInterceptor).addPathPatterns("/api/dashboard/**");
@@ -33,6 +33,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .allowedOrigins(allowedOrigin)
                 .allowedMethods("GET")
                 .allowedHeaders("X-Ops-Key")
+                .maxAge(3600);
+        registry.addMapping("/api/public/**")
+                .allowedOrigins(allowedOrigin)
+                .allowedMethods("GET")
                 .maxAge(3600);
     }
 }
