@@ -12,22 +12,31 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+
     @Autowired
     private RedisSlidingWindowService slidingWindowService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String ip = request.getRemoteAddr();
         String endpoint = request.getRequestURI();
         request.setAttribute("endpoint", endpoint);
 
-        boolean allowed = slidingWindowService.isAllowed(ip, endpoint);
+        Object tenantAttribute = request.getAttribute("tenantId");
+        String identity;
+        if (tenantAttribute instanceof String tenantId && !tenantId.isBlank()) {
+            identity = tenantId;
+        } else {
+            identity = "ip:" + request.getRemoteAddr();
+        }
+
+        boolean allowed = slidingWindowService.isAllowed(identity, endpoint);
 
         if(!allowed) {
             response.setStatus(429);
             response.setContentType("application/json");
             ErrorResponseDto error = new ErrorResponseDto("Rate limit exceeded", 60);
-            String json = JsonMapper.builder().build().writeValueAsString(error);
+            String json = JSON_MAPPER.writeValueAsString(error);
             response.getWriter().write(json);
             return false;
         }
