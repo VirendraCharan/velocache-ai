@@ -5,6 +5,7 @@ import TenantSelector from './TenantSelector';
 import TrafficChart from './TrafficChart';
 import BenchmarkCard from './BenchmarkCard';
 import SimulateButton from './SimulateButton';
+import KillRedisButton from './KillRedisButton';
 import './App.css';
 
 const TENANTS = ['tenant-a', 'tenant-b'];
@@ -115,6 +116,7 @@ export default function App() {
                             </section>
                         )}
                         {!opsKey && <SimulateButton tenantId={tenantId} />}
+                        {!opsKey && <KillRedisButton tenantId={tenantId} />}
                         {data ? (
                             <>
                                 <div className="section-heading">
