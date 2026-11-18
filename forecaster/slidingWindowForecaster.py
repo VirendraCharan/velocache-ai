@@ -1,30 +1,8 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import glob
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-minutes = 100
-base_traffic = 20
-spike_interval = 20
-spike_height = 50
-
-request_counts = []
-for minute in range (minutes):
-    value = base_traffic + np.random.randint(-3,3)
-    if minute % spike_interval < 3:
-        value += spike_height
-    request_counts.append(value)
-
-df = pd.DataFrame({
-    "minute": range(minutes),
-    "request_count": request_counts
-})
-
-df.to_csv(os.path.join(SCRIPT_DIR, "traffic_data.csv"), index=False)
-
-
 
 from sklearn.linear_model import LinearRegression
 
@@ -112,10 +90,6 @@ def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
 
     return result
 
-test_df = df[df["minute"] <= 22]  # cuts data off right after the minute-20 spike starts
-test_df.to_csv(os.path.join(SCRIPT_DIR, "test_data.csv"), index=False)
-print(run_forecast(os.path.join(SCRIPT_DIR, "test_data.csv"), "/traffic"))
-
 def run_all_exports():
     pattern = os.path.join(SCRIPT_DIR, "*__*-export.csv")
     for csv_path in glob.glob(pattern):
@@ -130,8 +104,3 @@ def run_all_exports():
 
 if __name__ == "__main__":
     run_all_exports()
-plt.plot(df["minute"], df["request_count"])
-plt.xlabel("Minute")
-plt.ylabel("Request Count")
-plt.title("Synthetic VeloCache Traffic")
-plt.savefig("traffic_plot.png")
