@@ -33,7 +33,17 @@ public class CacheWarmingScheduler {
     private static final int STALE_MINUTES = 15;
     private final Map<String, LocalDateTime> warmedForecasts = new ConcurrentHashMap<>();
     @Value("${velocache.warming.enabled:true}")
-    private boolean warmingEnabled;
+    private volatile boolean warmingEnabled;
+
+    public boolean isWarmingEnabled() {
+        return warmingEnabled;
+    }
+
+    public void setWarmingEnabled(boolean enabled) {
+        warmingEnabled = enabled;
+        warmedForecasts.clear();
+    }
+
     @Scheduled(fixedDelay = 30000)
     public void warmCache() {
         if (!warmingEnabled) {

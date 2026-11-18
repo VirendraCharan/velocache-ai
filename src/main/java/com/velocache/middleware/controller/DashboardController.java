@@ -4,21 +4,26 @@ import com.velocache.middleware.dto.CacheStatsDto;
 import com.velocache.middleware.dto.ForecastOverlayDto;
 import com.velocache.middleware.dto.TrafficPointDto;
 import com.velocache.middleware.dto.WarmingEventDto;
+import com.velocache.middleware.scheduler.CacheWarmingScheduler;
 import com.velocache.middleware.service.DashboardService;
 import com.velocache.middleware.service.WarmingEventLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/dashboard")
 public class DashboardController {
     @Autowired
     private DashboardService dashboardService;
+    @Autowired
+    private CacheWarmingScheduler cacheWarmingScheduler;
 
     @GetMapping("/cache-stats")
     public CacheStatsDto getCacheStats(@RequestParam String tenantId ) {
@@ -46,5 +51,16 @@ public class DashboardController {
             @RequestParam String tenantId,
             @RequestParam(defaultValue = "20") int limit) {
         return warmingEventLog.recent(tenantId, limit);
+    }
+
+    @GetMapping("/warming")
+    public Map<String, Boolean> getWarmingEnabled() {
+        return Map.of("warmingEnabled", cacheWarmingScheduler.isWarmingEnabled());
+    }
+
+    @PostMapping("/warming")
+    public Map<String, Boolean> setWarmingEnabled(@RequestParam boolean enabled) {
+        cacheWarmingScheduler.setWarmingEnabled(enabled);
+        return Map.of("warmingEnabled", cacheWarmingScheduler.isWarmingEnabled());
     }
 }
