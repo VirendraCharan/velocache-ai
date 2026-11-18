@@ -30,6 +30,12 @@ public class PublicDemoController {
     @Value("${velocache.demo-tenants:demo-a,demo-b}")
     private String demoTenantsCsv;
 
+    @Value("${velocache.demo-rhythm.enabled:false}")
+    private boolean demoRhythmEnabled;
+
+    @Value("${velocache.demo-rhythm.tenant:demo-rhythm}")
+    private String demoRhythmTenant;
+
     @Autowired
     private DashboardService dashboardService;
 
@@ -52,7 +58,7 @@ public class PublicDemoController {
                 return true;
             }
         }
-        return false;
+        return demoRhythmEnabled && tenantId.equals(demoRhythmTenant);
     }
 
     @GetMapping("/tenants")
@@ -66,6 +72,9 @@ public class PublicDemoController {
             if (!trimmedTenant.isEmpty()) {
                 tenants.add(trimmedTenant);
             }
+        }
+        if (demoRhythmEnabled && !tenants.contains(demoRhythmTenant)) {
+            tenants.add(demoRhythmTenant);
         }
         return tenants;
     }
@@ -123,6 +132,9 @@ public class PublicDemoController {
         if (!isDemoTenant(tenantId)) {
             return ResponseEntity.notFound().build();
         }
+        if (tenantId.equals(demoRhythmTenant)) {
+            return ResponseEntity.status(403).body(Map.of("status", "automated-tenant"));
+        }
         if (demoOutageService.start(tenantId) == DemoOutageService.Result.COOLING_DOWN) {
             return ResponseEntity.status(429).body(Map.of("status", "cooling-down"));
         }
@@ -136,6 +148,9 @@ public class PublicDemoController {
     public ResponseEntity<Map<String, String>> simulate(@RequestParam String tenantId) {
         if (!isDemoTenant(tenantId)) {
             return ResponseEntity.notFound().build();
+        }
+        if (tenantId.equals(demoRhythmTenant)) {
+            return ResponseEntity.status(403).body(Map.of("status", "automated-tenant"));
         }
         return switch (demoSimulationService.start(tenantId)) {
             case STARTED -> ResponseEntity.status(202).body(Map.of("status", "started"));
