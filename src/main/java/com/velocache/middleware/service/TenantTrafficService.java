@@ -3,11 +3,16 @@ package com.velocache.middleware.service;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -16,6 +21,8 @@ import java.util.UUID;
 @Service
 public class TenantTrafficService {
     private static final long WINDOW_MS = 15 * 60_000; // 15 minutes
+    private static final Logger logger = LoggerFactory.getLogger(TenantTrafficService.class);
+
     @Autowired
     private MeterRegistry meterRegistry;
 
@@ -63,6 +70,20 @@ public class TenantTrafficService {
         return countsByMinute;
     }
     public Set<String> getAllTrafficKeys() {
-        return redisTemplate.keys("velocache:traffic:*");
+        Set<String> keys = new HashSet<>();
+        ScanOptions options = ScanOptions.scanOptions()
+                .match("velocache:traffic:*")
+                .count(100)
+                .build();
+
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+        } catch (Exception e) {
+            logger.warn("Redis key scan failed ({})", e.getClass().getName());
+            return new HashSet<>();
+        }
+        return keys;
     }
 }
