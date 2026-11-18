@@ -4,6 +4,7 @@ import StatCards from './StatCards';
 import TenantSelector from './TenantSelector';
 import TrafficChart from './TrafficChart';
 import BenchmarkCard from './BenchmarkCard';
+import SimulateButton from './SimulateButton';
 import './App.css';
 
 const TENANTS = ['tenant-a', 'tenant-b'];
@@ -113,6 +114,7 @@ export default function App() {
                                 </div>
                             </section>
                         )}
+                        {!opsKey && <SimulateButton tenantId={tenantId} />}
                         {data ? (
                             <>
                                 <div className="section-heading">

@@ -26,3 +26,12 @@ export async function fetchPublic(path, params) {
     }
     return response.json();
 }
+
+export async function postPublic(path, params) {
+    const url = new URL('/api/public/' + path, API_BASE);
+    for (const [name, value] of Object.entries(params)) {
+        url.searchParams.set(name, value);
+    }
+    const response = await fetch(url, { method: 'POST' });
+    return { status: response.status };
+}
