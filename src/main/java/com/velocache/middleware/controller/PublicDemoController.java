@@ -4,6 +4,7 @@ import com.velocache.middleware.dto.CacheStatsDto;
 import com.velocache.middleware.dto.ForecastOverlayDto;
 import com.velocache.middleware.dto.WarmingEventDto;
 import com.velocache.middleware.service.DashboardService;
+import com.velocache.middleware.service.DemoOutageService;
 import com.velocache.middleware.service.DemoSimulationService;
 import com.velocache.middleware.service.WarmingEventLog;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ public class PublicDemoController {
 
     @Autowired
     private DemoSimulationService demoSimulationService;
+
+    @Autowired
+    private DemoOutageService demoOutageService;
 
     private boolean isDemoTenant(String tenantId) {
         if (tenantId == null || tenantId.trim().isEmpty()) {
@@ -102,6 +106,30 @@ public class PublicDemoController {
         return benchmark == null
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.ok(benchmark);
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getStatus(@RequestParam String tenantId) {
+        if (!isDemoTenant(tenantId)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of(
+                "simulatedRedisOutage", demoOutageService.isOutage(tenantId),
+                "secondsRemaining", demoOutageService.secondsRemaining(tenantId)));
+    }
+
+    @PostMapping("/kill-redis")
+    public ResponseEntity<Map<String, String>> killRedis(@RequestParam String tenantId) {
+        if (!isDemoTenant(tenantId)) {
+            return ResponseEntity.notFound().build();
+        }
+        if (demoOutageService.start(tenantId) == DemoOutageService.Result.COOLING_DOWN) {
+            return ResponseEntity.status(429).body(Map.of("status", "cooling-down"));
+        }
+        String burstStatus = demoSimulationService.start(tenantId) == DemoSimulationService.Result.STARTED
+                ? "started"
+                : "not-started";
+        return ResponseEntity.status(202).body(Map.of("status", "started", "burst", burstStatus));
     }
 
     @PostMapping("/simulate")

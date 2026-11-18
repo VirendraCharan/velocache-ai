@@ -18,8 +18,15 @@ public class CacheAsideService {
     private OriginService originService;
     @Autowired
     private TenantTrafficService trafficService;
+    @Autowired
+    private DemoOutageService demoOutageService;
 
     public String getOrLoad(String tenantId, String endpoint) {
+        if (demoOutageService.isOutage(tenantId)) {
+            trafficService.recordCacheMiss(tenantId);
+            return originService.fetch(tenantId, endpoint);
+        }
+
         String key = cacheKeyBuilder.build(tenantId, endpoint);
 
         String cached;
