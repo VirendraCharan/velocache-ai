@@ -10,29 +10,34 @@ const ROWS = [
 
 export default function BenchmarkCard() {
     return (
-        <section
-            style={{ border: '1px solid #444', borderRadius: 8, padding: 16, margin: '24px auto', maxWidth: 560 }}
-        >
-            <h2>Predictive warming: OFF vs ON</h2>
-            <table style={{ width: '100%', textAlign: 'center' }}>
-                <thead>
-                <tr>
-                    <th></th>
-                    <th>Warming OFF</th>
-                    <th>Warming ON</th>
-                </tr>
-                </thead>
-                <tbody>
+        <section className="benchmark-card glass-card">
+            <div className="card-heading benchmark-heading">
+                <div>
+                    <p className="eyebrow">Benchmark</p>
+                    <h2>Predictive warming: OFF vs ON</h2>
+                </div>
+                <span className="improved-badge">ON comparison</span>
+            </div>
+            <div className="benchmark-table" role="table" aria-label="Warming benchmark comparison">
+                <div className="benchmark-row benchmark-header" role="row">
+                    <span role="columnheader">Metric</span>
+                    <span role="columnheader"><i className="status-dot off" /> Warming OFF</span>
+                    <span role="columnheader"><i className="status-dot on" /> Warming ON</span>
+                </div>
                 {ROWS.map(([label, field]) => (
-                    <tr key={field}>
-                        <td style={{ textAlign: 'left' }}>{label}</td>
-                        <td>{benchmark.off[field]}</td>
-                        <td>{benchmark.on[field]}</td>
-                    </tr>
+                    <div className="benchmark-row" role="row" key={field}>
+                        <strong role="rowheader">{label}</strong>
+                        <span className="benchmark-value off-value" role="cell">{formatValue(field, benchmark.off[field])}</span>
+                        <span className="benchmark-value on-value" role="cell">{formatValue(field, benchmark.on[field])}</span>
+                    </div>
                 ))}
-                </tbody>
-            </table>
-            <p style={{ opacity: 0.8, fontSize: 14 }}>{benchmark.note}</p>
+            </div>
+            <p className="benchmark-note">{benchmark.note}</p>
         </section>
     );
+}
+
+function formatValue(field, value) {
+    if (field === 'hitRate') return `${(value * 100).toFixed(1)}%`;
+    return value;
 }

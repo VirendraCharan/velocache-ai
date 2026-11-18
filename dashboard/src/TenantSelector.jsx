@@ -1,7 +1,7 @@
 export default function TenantSelector({ tenants, value, onChange }) {
     return (
-        <label>
-            Tenant{' '}
+        <label className="tenant-selector">
+            <span>Tenant</span>
             <select value={value} onChange={(e) => onChange(e.target.value)}>
                 {tenants.map((tenant) => (
                     <option key={tenant} value={tenant}>

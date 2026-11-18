@@ -1,7 +1,7 @@
 import {
+    Area,
+    AreaChart,
     CartesianGrid,
-    Line,
-    LineChart,
     ReferenceDot,
     ReferenceLine,
     ResponsiveContainer,
@@ -25,6 +25,7 @@ function forecastMessage(forecast) {
 
 export default function TrafficChart({ series, forecast, events }) {
     const minutesOnAxis = new Set(series.map((point) => point.minute));
+    const predictedPoint = series.find((point) => point.minute === forecast.predictedMinute);
     const markerVisible =
         forecast.status === 'ok' &&
         forecast.predictedMinute &&
@@ -34,19 +35,38 @@ export default function TrafficChart({ series, forecast, events }) {
     );
 
     return (
-        <div>
-            <div style={{ width: '100%', height: 320 }}>
+        <section className="traffic-card glass-card">
+            <div className="card-heading">
+                <div>
+                    <p className="eyebrow">Traffic operations</p>
+                    <h2>Requests & warming</h2>
+                </div>
+                <div className="chart-legend">
+                    <span><i className="legend-line teal" />Requests</span>
+                    <span><i className="legend-line amber" />Forecast</span>
+                    <span><i className="legend-dot" />Warming</span>
+                </div>
+            </div>
+            <div className="chart-wrap">
                 <ResponsiveContainer>
-                    <LineChart data={series} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="minute" />
-                        <YAxis allowDecimals={false} />
-                        <Tooltip />
-                        <Line
+                    <AreaChart data={series} margin={{ top: 16, right: 12, bottom: 0, left: -12 }}>
+                        <defs>
+                            <linearGradient id="trafficArea" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.32} />
+                                <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0.02} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid stroke="#8b97ad" strokeOpacity={0.12} strokeDasharray="3 6" vertical={false} />
+                        <XAxis dataKey="minute" axisLine={false} tickLine={false} tick={{ fill: '#8b97ad', fontSize: 12 }} />
+                        <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: '#8b97ad', fontSize: 12 }} width={48} />
+                        <Tooltip content={<TrafficTooltip />} cursor={{ stroke: '#a78bfa', strokeOpacity: 0.35 }} />
+                        <Area
                             type="linear"
                             dataKey="actual"
                             name="Requests"
-                            stroke="#a78bfa"
+                            stroke="#2dd4bf"
+                            strokeWidth={2.5}
+                            fill="url(#trafficArea)"
                             dot={false}
                             connectNulls={false}
                             isAnimationActive={false}
@@ -57,25 +77,51 @@ export default function TrafficChart({ series, forecast, events }) {
                                 stroke="#fbbf24"
                                 strokeDasharray="6 4"
                                 ifOverflow="visible"
-                                label={{ value: 'Predicted rush', position: 'insideTopRight', fill: '#fbbf24' }}
+                                label={{ value: 'Forecast', position: 'insideTopRight', fill: '#fbbf24', fontSize: 11 }}
+                            />
+                        )}
+                        {markerVisible && predictedPoint && (
+                            <ReferenceDot
+                                x={forecast.predictedMinute}
+                                y={predictedPoint.actual || 0}
+                                r={6}
+                                fill="#fbbf24"
+                                stroke="#1a1f2e"
+                                strokeWidth={3}
+                                ifOverflow="visible"
                             />
                         )}
                         {warmedMinutes.map((minute) => (
                             <ReferenceDot
                                 key={minute}
                                 x={minute}
-                                y={0}
-                                r={6}
-                                fill="#2dd4bf"
-                                stroke="none"
+                                y={series.find((point) => point.minute === minute)?.actual || 0}
+                                r={5}
+                                fill="#34d399"
+                                stroke="#34d399"
+                                strokeWidth={2}
+                                className="warming-dot"
                                 ifOverflow="visible"
                             />
                         ))}
-                    </LineChart>
+                    </AreaChart>
                 </ResponsiveContainer>
             </div>
-            <p>{forecastMessage(forecast)}</p>
-            <p style={{ opacity: 0.7, fontSize: 14 }}>Teal dots: minutes when the warmer pre-filled the cache</p>
+            <div className="forecast-status">
+                <span className="forecast-icon">AI</span>
+                <p>{forecastMessage(forecast)}</p>
+            </div>
+        </section>
+    );
+}
+
+function TrafficTooltip({ active, payload, label }) {
+    if (!active || !payload?.length) return null;
+    const value = payload.find((item) => item.dataKey === 'actual')?.value;
+    return (
+        <div className="chart-tooltip">
+            <span>Minute {label}</span>
+            <strong>{value ?? '—'} requests</strong>
         </div>
     );
 }
