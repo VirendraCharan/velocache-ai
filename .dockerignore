@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.mvn
+target
+.env
+src/main/resources/application.properties
+dashboard
+simulator
+forecaster
+*.md
+*.png
+benchmark_results.txt
+package-lock.json
