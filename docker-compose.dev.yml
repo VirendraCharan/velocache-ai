@@ -1,0 +1,7 @@
+# Optional: local testing only; adds the dev profile so /api/dev/token exists. Never use for public deployment.
+
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      VELOCACHE_DEV_TOKEN_SECRET: ${VELOCACHE_DEV_TOKEN_SECRET:?Add VELOCACHE_DEV_TOKEN_SECRET to .env (any long random text) to use this file}
