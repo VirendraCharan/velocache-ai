@@ -87,38 +87,41 @@ export default function App() {
             ) : (
                 <>
                     <header className="dashboard-header">
-                        <div className="header-brand">
-                            <div className="brand-mark">VC</div>
-                            <div>
-                                <h1>VeloCache AI</h1>
+                        <div className="header-inner">
+                            <div className="header-brand">
+                                <div className="brand-mark">VC</div>
+                                <div className="brand-copy">
+                                    <h1>VeloCache AI</h1>
+                                    <p>Predictive Caching Middleware</p>
+                                </div>
                                 <div className="live-status"><span className="live-dot" /> LIVE</div>
                             </div>
-                        </div>
-                        <div className="header-controls">
-                            <div className="updated-time">
-                                <span>Last updated</span>
-                                <time>{updatedLabel}</time>
+                            <div className="header-controls">
+                                <div className="updated-time">
+                                    <span>Last updated</span>
+                                    <time>{updatedLabel}</time>
+                                </div>
+                                <TenantSelector tenants={opsKey ? TENANTS : demoTenants} value={tenantId} onChange={setTenantId} />
+                                {opsKey ? (
+                                    <button
+                                        className="disconnect-button"
+                                        onClick={() => {
+                                            setOpsKey('');
+                                            setTenantId(DEMO_TENANTS[0]);
+                                            setShowLogin(false);
+                                        }}
+                                    >
+                                        Disconnect
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="disconnect-button"
+                                        onClick={() => setShowLogin(true)}
+                                    >
+                                        Staff login
+                                    </button>
+                                )}
                             </div>
-                            <TenantSelector tenants={opsKey ? TENANTS : demoTenants} value={tenantId} onChange={setTenantId} />
-                            {opsKey ? (
-                                <button
-                                    className="disconnect-button"
-                                    onClick={() => {
-                                        setOpsKey('');
-                                        setTenantId(DEMO_TENANTS[0]);
-                                        setShowLogin(false);
-                                    }}
-                                >
-                                    Disconnect
-                                </button>
-                            ) : (
-                                <button
-                                    className="disconnect-button"
-                                    onClick={() => setShowLogin(true)}
-                                >
-                                    Staff login
-                                </button>
-                            )}
                         </div>
                     </header>
 
@@ -132,22 +135,29 @@ export default function App() {
                                 </div>
                             </section>
                         )}
-                        {!opsKey && (tenantId === AUTOMATED_TENANT ? (
-                            <section className="state-card glass-card">
-                                <p>Automated demo traffic (simulated): a burst every 5 minutes.</p>
+                        {!opsKey && (
+                            <section className="demo-deck" aria-label="Demo controls">
+                                <p className="section-kicker">
+                                    {tenantId === AUTOMATED_TENANT ? 'AUTOMATED TRAFFIC' : 'INTERACTIVE SIMULATION'}
+                                </p>
+                                {tenantId === AUTOMATED_TENANT ? (
+                                    <div className="state-card glass-card automated-card">
+                                        <p>Automated demo traffic (simulated): a burst every 5 minutes.</p>
+                                    </div>
+                                ) : (
+                                    <div className="demo-actions-grid">
+                                        <SimulateButton tenantId={tenantId} />
+                                        <KillRedisButton tenantId={tenantId} />
+                                    </div>
+                                )}
                             </section>
-                        ) : (
-                            <>
-                                <SimulateButton tenantId={tenantId} />
-                                <KillRedisButton tenantId={tenantId} />
-                            </>
-                        ))}
+                        )}
                         {data ? (
                             <>
                                 <div className="section-heading">
                                     <div>
-                                        <p className="eyebrow">Overview</p>
-                                        <h2>{tenantId}</h2>
+                                        <h2>Tenant Overview</h2>
+                                        <span className="tenant-pill">{tenantId}</span>
                                     </div>
                                     <span className="environment-badge">{opsKey ? 'Production' : 'Public demo'}</span>
                                 </div>
@@ -164,7 +174,7 @@ export default function App() {
                                     <span className="loading-spinner" />
                                     <div>
                                         <h2>Loading operations data</h2>
-                                        <p>Connecting to {tenantId}…</p>
+                                        <p>Connecting to {tenantId}...</p>
                                     </div>
                                 </section>
                             )
