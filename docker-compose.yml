@@ -1,0 +1,67 @@
+name: velocache
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: velocache_db
+      MYSQL_USER: velocache
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/velocache_db?allowPublicKeyRetrieval=true&useSSL=false"
+      SPRING_DATASOURCE_USERNAME: velocache
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      SPRING_DATA_REDIS_HOST: redis
+      VELOCACHE_OPS_KEY: ${VELOCACHE_OPS_KEY:?Set VELOCACHE_OPS_KEY in .env}
+      VELOCACHE_JWT_SECRET: ${VELOCACHE_JWT_SECRET:?Set VELOCACHE_JWT_SECRET in .env (at least 32 characters)}
+      VELOCACHE_DEMO_RHYTHM_ENABLED: "true"
+    volumes:
+      - ./forecaster:/app/forecaster
+      - ./simulator/results:/app/simulator/results:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  forecaster:
+    build: ./forecaster
+    volumes:
+      - ./forecaster:/app/forecaster
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "5173:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
