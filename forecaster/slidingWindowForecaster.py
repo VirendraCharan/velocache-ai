@@ -62,6 +62,7 @@ def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
     else:
         baseline = df["request_count"].tail(15).mean()
         spike_minute = find_next_rush(df)
+        method = "rhythm" if spike_minute is not None else None
 
         if spike_minute is None:
             future_minutes, predictions = forecast_next(df)
@@ -69,6 +70,7 @@ def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
             for minute, pred in zip(future_minutes, predictions):
                 if pred > spike_threshold:
                     spike_minute = int(minute)
+                    method = "trend"
                     break
 
         spike_at = None
@@ -80,7 +82,8 @@ def run_forecast(csv_path, endpoint_name, tenant_id=None, output_path=None):
             "tenant_id": tenant_id,
             "endpoint": endpoint_name,
             "predicted_spike_at": spike_at,
-            "confidence": "high" if spike_minute is not None else "none",
+            "confidence": "high" if method == "rhythm" else "low" if method == "trend" else "none",
+            "method": method if method is not None else "none",
             "current_baseline": round(baseline, 1),
             "generated_at": datetime.now().isoformat()
         }
