@@ -121,7 +121,7 @@ function TrafficTooltip({ active, payload, label }) {
     return (
         <div className="chart-tooltip">
             <span>Minute {label}</span>
-            <strong>{value ?? '—'} requests</strong>
+            <strong>{value ?? '-'} requests</strong>
         </div>
     );
 }

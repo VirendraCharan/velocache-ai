@@ -45,3 +45,4 @@ forecaster/*.tmp
 
 __pycache__/
 simulator/results/
+.github/skills/

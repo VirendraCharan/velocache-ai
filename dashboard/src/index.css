@@ -1,4 +1,7 @@
 :root {
+  --canvas: #080b12;
+  --card: #0f1522;
+  --elevated: #141c2e;
   --teal: #2dd4bf;
   --violet: #a78bfa;
   --amber: #fbbf24;
@@ -10,7 +13,7 @@
   --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-family: var(--sans);
   color: var(--text);
-  background: #080c17;
+  background: var(--canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -18,24 +21,33 @@
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
 
-html { min-width: 320px; min-height: 100%; background: #080c17; }
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--canvas);
+}
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 82% 12%, rgba(45, 212, 191, 0.055), transparent 24rem),
-    radial-gradient(circle at 12% 78%, rgba(167, 139, 250, 0.055), transparent 28rem),
-    linear-gradient(135deg, #0d1324 0%, #090d18 48%, #050811 100%);
-  background-attachment: fixed;
+  background: var(--canvas);
 }
 
 button,
 input,
-select { font: inherit; }
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+select,
+input {
+  border-radius: 8px;
+}
 
 button:focus-visible,
 input:focus-visible,
@@ -47,4 +59,13 @@ select:focus-visible {
 ::selection {
   color: #07130f;
   background: rgba(45, 212, 191, 0.85);
+}
+
+time,
+.stat-value,
+.benchmark-value,
+.chart-tooltip strong,
+.tenant-pill,
+.updated-time time {
+  font-variant-numeric: tabular-nums;
 }

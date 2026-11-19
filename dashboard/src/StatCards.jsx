@@ -22,11 +22,11 @@ function Card({ label, value, accent, icon, delay }) {
     return (
         <div className={`stat-card glass-card accent-${accent}`} style={{ animationDelay: `${delay}ms` }}>
             <div className="stat-card-top">
-                <span className="stat-icon">{icon}</span>
-                <span className="accent-bar" />
+                <span className="stat-label">{label}</span>
+                <span className="stat-icon" aria-hidden="true">{icon}</span>
             </div>
             <div className="stat-value" key={value}>{value}</div>
-            <div className="stat-label">{label}</div>
+            <span className="accent-bar" />
         </div>
     );
 }

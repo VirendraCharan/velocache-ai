@@ -87,7 +87,7 @@ function formatValue(field, row) {
         if (Number.isFinite(hits) && Number.isFinite(misses) && total > 0) {
             return `${((hits / total) * 100).toFixed(1)}%`;
         }
-        return '—';
+        return '-';
     }
     return row[field];
 }
