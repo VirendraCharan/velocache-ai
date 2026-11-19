@@ -1,6 +1,8 @@
 # VeloCache AI
 
-A predictive caching middleware built with Spring Boot, Redis, and a Python/Scikit-Learn forecasting layer.
+A predictive caching middleware built with Spring Boot, Redis, MySQL and a Python/scikit-learn forecasting worker, with a React dashboard.
+
+**Run the whole thing with one command (Docker required):** see [Run it in 3 steps](#run-it-in-3-steps).
 
 ## The problem
 
@@ -14,143 +16,165 @@ VeloCache AI sits in front of the application and counts traffic per tenant in R
 Client (sends a JWT)
    |
    v
-[ TrafficTrackingInterceptor ] -- reads tenant_id from the verified JWT
-   |        |
-   |        +--> Redis  velocache:traffic:{tenant}:{endpoint}   (sliding window)
+[ TrafficTrackingInterceptor ] -- verifies the JWT, takes tenant_id from it
+   |        |                     (missing/invalid token -> 401)
+   |        +--> Redis  velocache:traffic:{tenant}:{endpoint}   (sliding window, 15 min)
    v
-[ RateLimitInterceptor ]  (per IP + endpoint)
-   |
+[ RateLimitInterceptor ]  100 requests / 60 s per tenant + endpoint
+   |                      (atomic Lua script, fails open if Redis is down)
    v
 [ DataController ] --hit--> Redis  velocache:cache:{tenant}:{endpoint}
    | miss
    v
 [ OriginService ]  (simulated, 200 ms) --> fills the cache key (2 min shelf life)
 
-== TENANT BOUNDARY: every Redis key carries {tenant} from the JWT ==
+== TENANT BOUNDARY: every Redis key carries {tenant} from the verified JWT ==
 
 Background loops, each every 30 seconds:
 
 [ TelemetryExportScheduler ] reads traffic keys --> forecaster/*-export.csv
    |
    v
-[ Python forecaster loop ] --> forecaster/*-forecast.json
+[ Python forecaster worker ] --> forecaster/*-forecast.json
    |
    v
-[ CacheWarmingScheduler ]  spike inside 10 min + confidence high + fresh file
-   |
+[ CacheWarmingScheduler ]  only if: confidence "high" + fresh file
+   |                       + spike less than 60 s away + endpoint /api/data
    v
 fetch from OriginService --> write the same cache key before the rush
+
+Two doors for the dashboard:
+  /api/dashboard/**  staff door, needs the X-Ops-Key header, real tenants
+  /api/public/**     no key, read-only, only an allow-list of demo tenants
 ```
-Dashboard requests (`/api/dashboard/**`) skip traffic tracking, so the dashboard does not count itself as traffic, and they are protected by the `X-Ops-Key` header instead of a tenant token.
 
-## Results: warming OFF vs ON
+The app and the forecaster share one folder (`forecaster/`): the app writes exports and reads forecasts, the worker does the opposite. There is no message queue.
 
-Same simulator, same settings, Redis emptied before each run. The only difference is the warming switch (`velocache.warming.enabled`).
+## Run it in 3 steps
 
-| | Warming OFF | Warming ON |
-|---|---|---|
-| Data requests served | 417 | 417 |
-| Cache misses (slow trips to the origin) | 3 | 2 |
-| Hit rate | 99.3% | 99.5% |
-| Requests slower than 100 ms | 3 | 2 |
-| p99 latency | 57 ms | 57 ms |
+Requires Docker Desktop (Compose v2). Ports `8080` (API) and `5173` (dashboard) must be free.
 
-**Setup:** one tenant, a 15-minute run, a 2-minute burst every 5 minutes, and data requests only during bursts. Cached items expire after 2 minutes, so every burst starts with an empty cache. The origin is a simulated 200 ms wait.
+1. **Clone** the repo and open a terminal in it.
+2. **Copy `.env.example` to `.env`** and fill the three values:
+   - `MYSQL_PASSWORD`: any password for the bundled MySQL.
+   - `VELOCACHE_OPS_KEY`: the key you will type into the dashboard's Staff login.
+   - `VELOCACHE_JWT_SECRET`: at least 32 characters. The app refuses to start with a shorter one.
 
-**What this shows:** the forecaster needs two bursts before it can see the rhythm, so the first two bursts were cold in both runs. In the ON run the warmer filled the cache before the third burst, and one slow first request disappeared. p99 did not change, because only 3 of 417 requests were slow, too few to reach the 99th percentile.
+   `.env` is gitignored. Never commit it.
+3. **Start everything:**
 
-**What this does not show:** this is one run per setting, so it demonstrates the mechanism and is not a general speed-up claim.
+   ```
+   docker compose up --build -d
+   ```
+
+Open http://localhost:5173. The first build downloads dependencies and took about 6.5 minutes on the author's laptop; later builds with a warm Docker cache took under 30 seconds.
+
+Useful commands: `docker compose ps`, `docker compose logs app --tail 25`, `docker compose down` (keeps the database), `docker compose down -v` (also wipes the database).
+
+Notes:
+- Redis and MySQL are not published to your machine; only the API and dashboard are.
+- Containers run in UTC, so time labels on the dashboard are UTC.
+- The dev profile is off in Docker, so `POST /api/dev/token` does not exist (404).
+
+## What you will see
+
+The dashboard opens straight into a **public demo view** (no key), with three demo tenants:
+
+- **demo-a, demo-b**: use **Simulate traffic** to send a short burst of 40 requests through the real cache path, and **Kill Redis (simulated)** to make that tenant behave as if Redis were unreachable for 30 seconds. Both buttons have per-tenant cooldowns. The outage is a per-tenant flag in the app; it never touches the shared Redis connection.
+- **demo-rhythm**: an automated tenant that receives a burst of 40 requests every 5 minutes, plus one quiet request per minute in between. This is the one that lets the real forecaster and warmer act. After the first two bursts (about 10 minutes after startup), you will see a forecast marker and warming events. Visitors cannot add bursts to it.
+
+The simulate buttons do **not** produce a forecast by themselves: the forecaster needs to see a repeating rhythm.
+
+**Staff login** (top right) asks for your ops key and switches to the real tenants (`tenant-a`, `tenant-b`) through the key-protected routes.
 
 ## What is simulated and what is real
 
-**Simulated.** There are no real users. A Python script (`simulator/simulator.py`) generates all the traffic: steady background requests, plus a repeating burst (2 minutes every 5 minutes) to imitate a surge. In the benchmark, only one tenant sent traffic, and data requests were made only during bursts. The "origin" behind the cache is a stand-in that waits 200 ms. It is not a real database.
+**Simulated.** There are no real users. All traffic comes from scripts or built-in demo jobs. The "origin" behind the cache waits 200 ms; it is not a real database. The quiet one-request-per-minute background traffic for `demo-rhythm` is simulated too.
 
-**Real.** Everything between the script and the origin is real and running, measured over real HTTP on one laptop: the Spring Boot interceptors, JWT-based tenant scoping, the Redis sliding-window counters, the cache-aside read path, the Python forecaster, the scheduled warmer and the dashboard. In earlier phases, with two tenants sending traffic, I checked that each tenant's traffic and cache entries were stored under separate tenant-named Redis keys, that the rate limiter kicked in where it should, and that traffic was still recorded when requests were refused. On the dashboard, two tenants with different traffic showed separate numbers. An automated test confirms that two tenants create separate keys; it does not attempt a cross-tenant read (see Known limitations).
+**Real.** Everything between the traffic and the origin runs for real, on one machine: the Spring Boot interceptors, JWT-based tenant scoping, the Redis sliding-window counters and rate limiter, the cache-aside path, the Python forecaster, the scheduled warmer and the dashboard.
 
-**Fairness.** The benchmark's request rate was chosen to stay under the rate limit (100 requests per minute), so refused requests could not make the latency numbers look better. Cached items expire after 2 minutes so each burst starts cold; that is a setting I chose to make the effect visible, and it is stated here on purpose.
+## Measured results
+
+These are single observations on one laptop, with simulated traffic and a simulated 200 ms origin. They show the mechanism works; they are not statistics.
+
+**Predictive warming (Docker, clean start, automated `demo-rhythm` tenant, 19 Nov 2026).**
+- After one burst, the forecast was `confidence: low`, `method: trend`, and the warmer did nothing.
+- After two bursts it read `confidence: high`, `method: rhythm`, with the next spike on the 5-minute beat.
+- The warmer logged `SPIKE SOON` and `WARMED` about 40 seconds before the third burst. Totals went from 78 hits and 2 misses to 118 hits and 2 misses, so the third burst had 40 hits and 0 misses, while each of the first two bursts had 39 hits and 1 miss. The visible effect is one avoided cold miss (about 200 ms) per burst.
+- An earlier run outside Docker, on 18 Nov, showed the same pattern (39/1, then 78/2, then 118/2).
+
+**Redis outage (Redis really stopped, one request, simulated 200 ms origin).** Before the fail-fast fix the request hung with no answer after 20 seconds. After the fix it returned `200` in about 0.22 s, and the app reconnected on its own when Redis came back (about 15 ms for cache hits).
+
+**Simulated outage on `demo-a`.** During the outage burst: 0 hits and 40 misses (a normal burst is 39 hits and 1 miss). The tenant `demo-b` was unaffected.
+
+**Tenant isolation.** 4 of 4 automated tests pass against a real Redis and MySQL: missing or invalid token gives 401; tenant B cannot read tenant A's cached value; tenant B cannot read tenant A's saved history; the rate limit applies per tenant (100 allowed, further requests get 429, another tenant still gets 200).
+
+**Signing key.** With a configured `VELOCACHE_JWT_SECRET`, a token issued before `docker compose restart app` was still accepted afterwards.
+
+**What has not been measured.** No full warming OFF vs ON benchmark has been run with the current code. `simulator/run_benchmark.py` exists for that (repeated alternating runs, medians), but I have not run the full version, so there is no benchmark table here. Short runs give a meaningless p99, so none is quoted.
+
+## How the forecaster decides
+
+- **Rhythm detector** (`method: rhythm`, confidence `high`): finds peak minutes (at least 80% of the busiest minute), groups them into bursts, and needs at least two bursts. It predicts the next burst start by repeating the last gap. The busiest minute must also be at least 1.5 times the quietest one.
+- **Trend fallback** (`method: trend`, confidence `low`): a linear regression over the last 15 minutes. It is only a guess, so it is labelled `low`, and the warmer ignores anything that is not `high`.
+- Fewer than 5 minutes of history gives `low` with `insufficient_history`.
+
+The forecast time is built from today's date, so a spike predicted across midnight would be wrong.
+
+## Tests
+
+Java tests use a locally running Redis and MySQL:
+
+```
+.\mvnw.cmd test -Dtest=TenantIsolationIntegrationTest
+```
 
 ## Tech stack
 
 | Tool | What it does here | Why this choice |
 |---|---|---|
-| Java 21 + Spring Boot 4.1.0 | The middleware server | Interceptors let one class check every request before any controller runs, which is what traffic tracking and rate limiting need |
-| Redis | Sliding-window traffic counts and the cache | It lives in memory, so reads are fast. Sorted sets store each request with its timestamp as the score, so old entries can be trimmed from a moving window |
-| MySQL | Permanent traffic logs saved by `POST /api/track` | Redis forgets old data on purpose, so history that must last goes in a database. The save is direct and synchronous; automatic asynchronous logging of every request is not built yet |
-| JWT (jjwt library) | Carries the tenant ID inside a signed token | The server can verify who a request belongs to without a database lookup, so the tenant comes from a verified claim and never from client input |
-| Micrometer + Actuator | Cache hit and miss counters | The counters can be read live at `/actuator/metrics` while the app runs |
-| Python + pandas + scikit-learn | The forecaster | It detects the repeating burst rhythm, with a linear regression as a fallback when no rhythm is found. It runs as a separate small script, so a forecast failure cannot take the server down |
-| Maven | Builds the project and manages libraries | It downloads and versions every library from `pom.xml` |
-| React + Vite + Recharts | The ops dashboard in `dashboard/` | One polling hook feeds every component, so the chart and the cards always show the same moment. Recharts draws the traffic line, the forecast marker and the warming dots |
+| Java 21 + Spring Boot 4.1 | The middleware server | Interceptors let one class check every request before any controller runs, which is what token checks, traffic tracking and rate limiting need |
+| Redis | Sliding-window traffic counts, rate limiter, cache | In memory, so reads are fast. Sorted sets store each request with its timestamp as the score, so old entries can be trimmed from a moving window; a Lua script makes the rate limit check atomic |
+| MySQL | Permanent traffic logs saved by `POST /api/track` | Redis forgets old data on purpose; history that must last goes in a database |
+| JWT (jjwt) | Carries the tenant ID in a signed token | The tenant comes from a verified claim and never from client input |
+| Micrometer + Actuator | Cache hit and miss counters per tenant | Readable live while the app runs |
+| Python, pandas, scikit-learn | The forecaster worker | A separate process, so a forecast failure cannot take the server down |
+| React + Vite + Recharts | Dashboard in `dashboard/` | One polling hook feeds every component, so the chart and cards show the same moment |
+| Docker Compose | Runs app, forecaster, dashboard, Redis and MySQL together | One command from a fresh clone |
 
-## How to run it
+## Running without Docker (development)
 
-Docker Compose is planned but not built yet, so for now the setup is manual. Run everything below from the repo folder (the one containing `pom.xml`).
+1. Start Redis and MySQL (a database named `velocache_db`).
+2. Copy `src/main/resources/application.properties.example` to `application.properties` (gitignored), fill in the placeholders and use long random values for `velocache.dev-token-secret` and `velocache.ops-key`.
+3. Run `MiddlewareApplication` from your IDE with the `dev` profile from the repo folder (the app reads `forecaster/` by relative path).
+4. Install the forecaster libraries from `forecaster/requirements.txt` and run `python forecaster/run_forecaster_loop.py` in its own terminal.
+5. In `dashboard/`: `npm install`, then `npm run dev`, and open http://localhost:5173.
 
-**1. Start Redis and MySQL.** Redis must answer `PONG` to `redis-cli ping`. MySQL needs a database named `velocache_db`.
-
-**2. Create your settings file.** Copy `src/main/resources/application.properties.example` to `application.properties` (it is gitignored) and fill in the placeholders, including your own MySQL username and password and your Redis settings. Set `velocache.dev-token-secret` and `velocache.ops-key` to long random values, and never reuse the example placeholders. To switch warming off, add `velocache.warming.enabled=false`. It is on by default.
-
-**3. Start the app.** Run `MiddlewareApplication` from your IDE and wait for `Started MiddlewareApplication`.
-
-**4. Install the Python libraries.**
+To use the dev token endpoint (simulator, benchmark runner) against the Docker stack, use the optional override and set `VELOCACHE_DEV_TOKEN_SECRET` in `.env`:
 
 ```
-pip install pandas numpy matplotlib scikit-learn requests
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
-**5. Start the forecaster loop** in its own terminal:
+## Security notes
 
-```
-python forecaster/run_forecaster_loop.py
-```
-
-**6. Run the simulator** in a second terminal. It reads the dev secret from an environment variable, so the secret is never stored in the repo. Set it in the **same terminal window** you run the simulator from (PowerShell shown; the value you type is hidden):
-
-```
-$s = Read-Host "Dev secret" -AsSecureString
-$env:VELOCACHE_DEV_SECRET = [System.Net.NetworkCredential]::new('', $s).Password
-python simulator/simulator.py ON
-```
-
-Enter the same value as `velocache.dev-token-secret` in your `application.properties`. The word after the file name (`ON` or `OFF`) labels the run in `benchmark_results.txt`.
-
-The run takes 15 minutes. For a fair comparison, empty Redis (`redis-cli flushall`) and delete the old `forecaster/*-export.csv` and `forecaster/*-forecast.json` files before each run.
-
-## Dashboard
-
-A small React dashboard (Vite + Recharts) lives in `dashboard/`. For each tenant it shows live requests per minute (last 15 minutes), the forecaster's predicted next rush as a vertical marker, teal dots where the warmer pre-filled the cache, cache hit/miss numbers, and a snapshot of the warming OFF vs ON benchmark.
-
-**Run it** (Node.js LTS installed, Redis and the Spring app already running):
-
-```
-cd dashboard
-npm install
-npm run dev
-```
-
-Open http://localhost:5173 and type the ops key (`velocache.ops-key` in your local `application.properties`; `application.properties.example` shows the placeholder).
-
-**Security notes**
-- The dashboard endpoints (`/api/dashboard/**`) require the `X-Ops-Key` header. The key is typed into the page and kept only in memory; it is never stored or written into the code.
-- CORS allows one exact origin (`velocache.cors.allowed-origin`, default `http://localhost:5173`), GET only, and only the `X-Ops-Key` header.
-- `POST /api/dev/token` exists only so the local simulator can get test tokens. It must be disabled or removed in any public deployment.
-**What the dashboard does not prove**
-- The forecast marker was demonstrated with a hand-edited forecast file, because a real prediction needs three rushes.
-- The benchmark card shows one recorded run (see Results), not live data.
+- The staff routes (`/api/dashboard/**`) need the `X-Ops-Key` header, compared in constant time. If no key is configured, every request is rejected.
+- The public routes (`/api/public/**`) are read-only except two rate-limited demo actions, and only work for an allow-list of demo tenants. Any other tenant gets a 404.
+- CORS allows one origin (`velocache.cors.allowed-origin`, default `http://localhost:5173`).
+- `POST /api/dev/token` only exists with the `dev` profile.
+- Secrets live in `.env` or the gitignored `application.properties`, never in the repo.
 
 ## Known limitations
 
-- **Benchmark scope.** One run per setting, one tenant, 15 minutes, and the simulated origin is a 200 ms wait. It demonstrates the mechanism and is not a general performance claim.
-- **The forecaster needs two bursts.** It measures the gap between bursts, so the first two bursts are always cold. It only finds bursts that last minutes, because it counts requests per whole minute.
-- **It forecasts one rhythm, per endpoint as a whole.** Warming works on an endpoint's cache key, not on individual items inside it. Items are not tracked separately.
-- **The forecast time uses today's date,** so a burst predicted across midnight would be off by a day. Minutes with no traffic are not filled in as zero.
-- **Delay.** The export, the forecaster and the warmer each run every 30 seconds, so a forecast can take up to about 90 seconds to turn into a warm cache.
-- **The forecaster is run by a separate script** (`forecaster/run_forecaster_loop.py`), not managed by the app. The warmer finds forecasts through the relative folder `forecaster/`, so the app must be started from the repo folder.
-- **Scaling.** `redisTemplate.keys()` blocks Redis while it scans, and production would use `SCAN`. Each request is stored as its own Redis entry, which will not scale to high traffic. The 15-minute window keeps it bounded here.
-- **The warmer also fills a cache key for `/api/track`,** which nothing reads. It is harmless but wasteful.
-- **Not built yet:** automatic asynchronous MySQL logging of every request (`POST /api/track` saves a row directly), Docker Compose and a public deployment.
-- **Rate limiting is per IP and endpoint,** not per tenant.
-- **Missing or invalid tokens are not rejected.** Such a request is counted and cached under `unknown-tenant`. Fine on a laptop; a public deployment must decide how to handle it.
-- **Tokens do not survive a restart.** The token signing key is generated at every app start, so every restart invalidates all tokens.
-- **The isolation test is limited.** It checks that requests from two tenants create separate tenant-named cache keys. It does not attempt a cross-tenant read; isolation rests on the key design (the tenant comes only from the verified token).
-- **Dashboard.** One shared ops key; the hit/miss cards reset when the app restarts (the chart keeps its history for 15 minutes because it reads Redis); the view covers one endpoint (`/api/data`) and the tenant list is fixed in the code.
+- **Simulated origin.** The origin is a 200 ms wait, and all traffic is simulated.
+- **No full benchmark yet** (see Measured results).
+- **The rhythm detector needs two bursts.** For the first minutes the trend fallback can make a weak guess; it is labelled `low` and ignored by the warmer, but the dashboard may still show its marker.
+- **One rhythm per endpoint.** Warming works on an endpoint's cache key, not on items inside it.
+- **Midnight.** The forecast time uses today's date. Minutes with no traffic are not filled in as zero.
+- **Delay.** Export, forecaster and warmer each run every 30 seconds, so a forecast can take up to about 90 seconds to turn into a warm cache.
+- **File hand-off.** The app and forecaster share a folder instead of a queue.
+- **Scaling.** Each request is its own Redis entry (kept for a 15-minute window), which would not scale to high traffic.
+- **Counters reset on restart.** Cache hit/miss counters are in memory.
+- **UTC labels.** Containers run in UTC, so dashboard times are UTC.
+- **Tenant IDs** must not contain `_` or `~` (forecast file names depend on them).
+- **Not built:** automatic MySQL logging of every request (`POST /api/track` saves a row directly), CI, and any public deployment. This project is meant to run locally or in Docker.
