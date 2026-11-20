@@ -97,6 +97,35 @@ The simulate buttons do **not** produce a forecast by themselves: the forecaster
 
 These are single observations on one laptop, with simulated traffic and a simulated 200 ms origin. They show the mechanism works; they are not statistics.
 
+**Three-run benchmark (20 Nov 2026).**
+
+The benchmark ran each of three configurations three times for 900 seconds per run:
+
+1. cache-disabled,
+2. cache-aside,
+3. predictive warming.
+
+The traffic profile used 1 dedicated benchmark tenant per run, 150-request bursts, a 120-second burst duration, a 300-second spike interval, and one quiet request every 2 seconds. Each run had 60 seconds of warm-up and 60 seconds of cooldown. The cache was reset by deleting only the benchmark tenant's Redis keys before each run; no global `FLUSHDB` was used.
+
+The laptop/environment recorded in the benchmark evidence was Windows 10 AMD64, 16 logical CPUs, 7083802624 bytes of Docker-visible memory, Python 3.11.9, Docker Server 29.7.2 and Docker Compose 5.5.1.
+
+| Configuration | Runs | `/api/data` 200 responses | Median | P95 | P99 | Cache-hit ratio | Origin calls |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Cache disabled | 3 | 1014 | 221.878 ms | 239.211 ms | 243.289 ms | 0.0000% | 1014 |
+| Cache-aside | 3 | 1262 | 21.396 ms | 37.416 ms | 45.436 ms | 99.2868% | 9 |
+| Predictive warming | 3 | 1266 | 18.853 ms | 36.709 ms | 40.133 ms | 99.2891% | 14 |
+
+There were 0 HTTP 429 responses, 0 transport errors and 0 other `/api/data` status errors in all three configurations. The cache-disabled run had no cache hits. The cache-aside and predictive-warming runs had nearly identical cache-hit ratios.
+
+Across the three predictive-warming runs, 5 warming events were observed. These measurements do not establish statistical superiority or production-scale performance. They show the mechanism on one laptop with simulated traffic, a simulated 200 ms origin and a 900-second run for each repetition.
+
+Raw benchmark files are in `simulator/results/slice-2-20261120234708/`:
+
+- `benchmark-latest.json`
+- `benchmark-runs.csv`
+- `benchmark-summary.txt`
+- one JSON file per run under `runs/`
+
 **Predictive warming (Docker, clean start, automated `demo-rhythm` tenant, 19 Nov 2026).**
 - After one burst, the forecast was `confidence: low`, `method: trend`, and the warmer did nothing.
 - After two bursts it read `confidence: high`, `method: rhythm`, with the next spike on the 5-minute beat.
@@ -111,7 +140,7 @@ These are single observations on one laptop, with simulated traffic and a simula
 
 **Signing key.** With a configured `VELOCACHE_JWT_SECRET`, a token issued before `docker compose restart app` was still accepted afterwards.
 
-**What has not been measured.** No full warming OFF vs ON benchmark has been run with the current code. `simulator/run_benchmark.py` exists for that (repeated alternating runs, medians), but I have not run the full version, so there is no benchmark table here. Short runs give a meaningless p99, so none is quoted.
+**What has not been measured.** The full benchmark is a one-laptop observation with simulated traffic and a simulated origin. It does not measure a real database, real production users, 10K TPS, production-scale concurrency, multiple application instances or a statistically significant population of repeated hardware environments.
 
 ## How the forecaster decides
 
@@ -167,7 +196,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ## Known limitations
 
 - **Simulated origin.** The origin is a 200 ms wait, and all traffic is simulated.
-- **No full benchmark yet** (see Measured results).
+- **Benchmark scope.** The benchmark evidence is from one Windows laptop and three repetitions. It is not a production-scale or statistical claim.
 - **The rhythm detector needs two bursts.** For the first minutes the trend fallback can make a weak guess; it is labelled `low` and ignored by the warmer, but the dashboard may still show its marker.
 - **One rhythm per endpoint.** Warming works on an endpoint's cache key, not on items inside it.
 - **Midnight.** The forecast time uses today's date. Minutes with no traffic are not filled in as zero.
