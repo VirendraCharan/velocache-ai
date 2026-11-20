@@ -283,6 +283,7 @@ def main():
             "burstIntervalSeconds": round(burst_interval, 3),
             "baseUrl": args.base_url,
             "cacheMode": args.cache_mode,
+            "latencies": combined["latencies"],
             "requestAccounting": {
                 "data": combined["data"],
                 "track": combined["track"],

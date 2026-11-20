@@ -254,6 +254,31 @@ def latency_metrics(observations):
     }
 
 
+def validate_simulator_result(simulator_result):
+    if "latencies" not in simulator_result:
+        raise RuntimeError("simulator output missing top-level latencies")
+    latencies = simulator_result["latencies"]
+    if not isinstance(latencies, list) or not all(
+        isinstance(value, (int, float)) for value in latencies
+    ):
+        raise RuntimeError("simulator output latencies must be a number list")
+    accounting = simulator_result.get("requestAccounting")
+    if not isinstance(accounting, dict):
+        raise RuntimeError("simulator output missing requestAccounting")
+    data_accounting = accounting.get("data")
+    if not isinstance(data_accounting, dict):
+        raise RuntimeError("simulator output missing data request accounting")
+    successful = data_accounting.get("successful200")
+    if not isinstance(successful, int):
+        raise RuntimeError("simulator output successful200 must be an integer")
+    if len(latencies) != successful:
+        raise RuntimeError(
+            "latency shape mismatch: latencies={0}, successful200={1}".format(
+                len(latencies), successful
+            )
+        )
+
+
 def run_simulator(
     repo_root, simulator_path, output_path, label, tenant_ids, args, cache_mode
 ):
@@ -459,6 +484,7 @@ def main():
 
                 with open(output_path, "r", encoding="utf-8") as input_file:
                     simulator_result = json.load(input_file)
+                validate_simulator_result(simulator_result)
                 accounting = simulator_result["requestAccounting"]
                 data_counts = accounting["data"]
                 cache_delta = {
