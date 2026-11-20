@@ -99,7 +99,7 @@ These are single observations on one laptop, with simulated traffic and a simula
 
 **Three-run benchmark (20 Nov 2026).**
 
-The benchmark ran each of three configurations three times for 900 seconds per run:
+These include a three-run benchmark and earlier single observations on one laptop, with simulated traffic and a simulated 200 ms origin. They show the mechanism works; they are not statistical proof or production-scale evidence.
 
 1. cache-disabled,
 2. cache-aside,
