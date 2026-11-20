@@ -22,6 +22,15 @@ public class CacheAsideService {
     private DemoOutageService demoOutageService;
 
     public String getOrLoad(String tenantId, String endpoint) {
+        return getOrLoad(tenantId, endpoint, false);
+    }
+
+    public String getOrLoad(String tenantId, String endpoint, boolean bypassCache) {
+        if (bypassCache) {
+            trafficService.recordCacheMiss(tenantId);
+            return originService.fetch(tenantId, endpoint);
+        }
+
         if (demoOutageService.isOutage(tenantId)) {
             trafficService.recordCacheMiss(tenantId);
             return originService.fetch(tenantId, endpoint);

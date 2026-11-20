@@ -13,8 +13,8 @@ SPIKE_DURATION_SECONDS = 120
 REQUEST_TIMEOUT_SECONDS = 10
 
 
-def get_token(dev_secret, tenant_id):
-    url = "http://localhost:8080/api/dev/token"
+def get_token(base_url, dev_secret, tenant_id):
+    url = base_url + "/api/dev/token"
     headers = {"X-Dev-Secret": dev_secret}
     params = {"tenantId": tenant_id}
     try:
@@ -31,8 +31,8 @@ def get_token(dev_secret, tenant_id):
     return response.text
 
 
-def send_traffic(tenant_id, token, endpoint):
-    url = "http://localhost:8080/api/track"
+def send_traffic(base_url, tenant_id, token, endpoint):
+    url = base_url + "/api/track"
     headers = {"Authorization": "Bearer " + token}
     body = {"endpoint": endpoint, "requestCount": 1}
     try:
@@ -47,9 +47,12 @@ def send_traffic(tenant_id, token, endpoint):
     return response.status_code
 
 
-def read_data(tenant_id, token, endpoint):
-    url = "http://localhost:8080/api/data"
+def read_data(base_url, tenant_id, token, endpoint, cache_mode, ops_key):
+    url = base_url + "/api/data"
     headers = {"Authorization": "Bearer " + token}
+    if cache_mode == "bypass":
+        headers["X-Ops-Key"] = ops_key
+        headers["X-Benchmark-Cache"] = "bypass"
     params = {"endpoint": endpoint}
     start = time.time()
     try:
@@ -71,7 +74,33 @@ def is_spike_time(elapsed_seconds, burst_duration, spike_interval):
 
 
 def empty_results():
-    return {"latencies": [], "refused": 0, "errors": 0}
+    return {
+        "latencies": [],
+        "tokenErrors": 0,
+        "data": {
+            "successful200": 0,
+            "refused429": 0,
+            "transportErrors": 0,
+            "otherStatusErrors": 0,
+        },
+        "track": {
+            "successful200": 0,
+            "refused429": 0,
+            "transportErrors": 0,
+            "otherStatusErrors": 0,
+        },
+    }
+
+
+def record_result(counters, status):
+    if status is None:
+        counters["transportErrors"] += 1
+    elif status == 200:
+        counters["successful200"] += 1
+    elif status == 429:
+        counters["refused429"] += 1
+    else:
+        counters["otherStatusErrors"] += 1
 
 
 def run_tenant(
@@ -84,12 +113,15 @@ def run_tenant(
     spike_interval,
     quiet_interval,
     endpoint,
+    base_url,
+    cache_mode,
+    ops_key,
     results,
 ):
     tenant_results = empty_results()
-    token = get_token(dev_secret, tenant)
+    token = get_token(base_url, dev_secret, tenant)
     if token is None:
-        tenant_results["errors"] += 1
+        tenant_results["tokenErrors"] += 1
         results[tenant] = tenant_results
         return
 
@@ -101,17 +133,17 @@ def run_tenant(
             spike_interval,
         )
 
-        status = send_traffic(tenant, token, "/simulated/" + tenant)
-        if status is None:
-            tenant_results["errors"] += 1
-        elif status == 429:
-            tenant_results["refused"] += 1
-        elif status != 200:
-            tenant_results["errors"] += 1
+        status = send_traffic(
+            base_url, tenant, token, "/simulated/" + tenant
+        )
+        record_result(tenant_results["track"], status)
         print(tenant, status, "SPIKE" if currently_spiking else "calm")
 
         if currently_spiking:
-            read_status, read_ms = read_data(tenant, token, endpoint)
+            read_status, read_ms = read_data(
+                base_url, tenant, token, endpoint, cache_mode, ops_key
+            )
+            record_result(tenant_results["data"], read_status)
             print(
                 tenant,
                 "data",
@@ -121,10 +153,6 @@ def run_tenant(
             )
             if read_status == 200:
                 tenant_results["latencies"].append(read_ms)
-            elif read_status == 429:
-                tenant_results["refused"] += 1
-            else:
-                tenant_results["errors"] += 1
 
         time.sleep(burst_interval if currently_spiking else quiet_interval)
 
@@ -145,8 +173,17 @@ def summarize(result):
         "p99Ms": round(p99),
         "maxMs": round(maximum),
         "slowCalls": len([latency for latency in ordered if latency > 100]),
-        "refused": result["refused"],
-        "errors": result["errors"],
+        "refused": (
+            result["data"]["refused429"]
+            + result["track"]["refused429"]
+        ),
+        "errors": (
+            result["tokenErrors"]
+            + result["data"]["transportErrors"]
+            + result["data"]["otherStatusErrors"]
+            + result["track"]["transportErrors"]
+            + result["track"]["otherStatusErrors"]
+        ),
     }
 
 
@@ -166,7 +203,11 @@ def main():
     parser.add_argument("--spike-interval", type=int, default=SPIKE_INTERVAL_SECONDS)
     parser.add_argument("--quiet-interval", type=float, default=INTERVAL_SECONDS)
     parser.add_argument("--out")
+    parser.add_argument("--base-url", default="http://localhost:8080")
+    parser.add_argument("--cache-mode", choices=("normal", "bypass"), default="normal")
     args = parser.parse_args()
+    args.base_url = args.base_url.rstrip("/")
+    ops_key = os.environ.get("VELOCACHE_OPS_KEY", "")
     if args.burst_size < 1:
         parser.error("--burst-size must be at least 1")
     if args.burst_duration < 1:
@@ -189,6 +230,9 @@ def main():
                 args.spike_interval,
                 args.quiet_interval,
                 args.endpoint,
+                args.base_url,
+                args.cache_mode,
+                ops_key,
                 results,
             ),
         )
@@ -210,8 +254,9 @@ def main():
     combined = empty_results()
     for tenant in tenants:
         combined["latencies"].extend(results[tenant]["latencies"])
-        combined["refused"] += results[tenant]["refused"]
-        combined["errors"] += results[tenant]["errors"]
+        for category in ("data", "track"):
+            for field in combined[category]:
+                combined[category][field] += results[tenant][category][field]
     combined_summary = summarize(combined)
 
     print("---- SUMMARY ----")
@@ -236,8 +281,41 @@ def main():
             "burstDurationSeconds": args.burst_duration,
             "spikeIntervalSeconds": args.spike_interval,
             "burstIntervalSeconds": round(burst_interval, 3),
+            "baseUrl": args.base_url,
+            "cacheMode": args.cache_mode,
+            "requestAccounting": {
+                "data": combined["data"],
+                "track": combined["track"],
+                "tokenErrors": sum(
+                    result["tokenErrors"] for result in results.values()
+                ),
+                "totalRequestsAttempted": sum(
+                    sum(tenant_result[category].values())
+                    for tenant_result in results.values()
+                    for category in ("data", "track")
+                ),
+                "totalCompletedHttpRequests": sum(
+                    result["successful200"]
+                    + result["refused429"]
+                    + result["otherStatusErrors"]
+                    for category in ("data", "track")
+                    for result in (combined[category],)
+                ),
+                "totalValidLatencyObservations": len(combined["latencies"]),
+            },
             **combined_summary,
-            "perTenant": summaries,
+            "perTenant": {
+                tenant: {
+                    **summaries[tenant],
+                    "latencies": results[tenant]["latencies"],
+                    "requestAccounting": {
+                        "data": results[tenant]["data"],
+                        "track": results[tenant]["track"],
+                        "tokenErrors": results[tenant]["tokenErrors"],
+                    },
+                }
+                for tenant in tenants
+            },
         }
         with open(args.out, "w") as output_file:
             json.dump(output, output_file, indent=2)
