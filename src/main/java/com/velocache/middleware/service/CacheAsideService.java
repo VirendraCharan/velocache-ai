@@ -46,7 +46,7 @@ public class CacheAsideService {
         String value = originService.fetch(tenantId, endpoint);
         if (cached == null) {
             try {
-                stringRedisTemplate.opsForValue().set(key, value, CacheKeyBuilder.SHELF_LIFE);
+                stringRedisTemplate.opsForValue().set(key, value, cacheKeyBuilder.shelfLife());
             } catch (RuntimeException exception) {
                 logger.warn("Redis cache write failed: {}", exception.getClass().getName());
             }

@@ -37,6 +37,7 @@ services:
       VELOCACHE_OPS_KEY: ${VELOCACHE_OPS_KEY:?Set VELOCACHE_OPS_KEY in .env}
       VELOCACHE_JWT_SECRET: ${VELOCACHE_JWT_SECRET:?Set VELOCACHE_JWT_SECRET in .env (at least 32 characters)}
       VELOCACHE_DEMO_RHYTHM_ENABLED: "true"
+      VELOCACHE_CACHE_SHELF_LIFE_SECONDS: ${VELOCACHE_CACHE_SHELF_LIFE_SECONDS:-120}
     volumes:
       - ./forecaster:/app/forecaster
       - ./simulator/results:/app/simulator/results:ro

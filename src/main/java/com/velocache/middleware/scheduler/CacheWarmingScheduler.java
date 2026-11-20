@@ -104,7 +104,7 @@ public class CacheWarmingScheduler {
     private void warm(String tenantId, String endpoint) {
         String key = cacheKeyBuilder.build(tenantId, endpoint);
         String value = originService.fetch(tenantId, endpoint);
-        stringRedisTemplate.opsForValue().set(key, value, CacheKeyBuilder.SHELF_LIFE);
+        stringRedisTemplate.opsForValue().set(key, value, cacheKeyBuilder.shelfLife());
         logger.info("WARMED key={}", key);
         warmingEventLog.record(tenantId, endpoint, "predicted");
     }
