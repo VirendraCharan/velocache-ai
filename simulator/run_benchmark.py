@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import platform
 import statistics
 import subprocess
 import sys
@@ -23,6 +24,57 @@ MEDIAN_FIELDS = (
 )
 
 
+def collect_environment_metadata(repo_root):
+    def run_command(command):
+        try:
+            result = subprocess.run(
+                command,
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return None
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip()
+
+    server_version = run_command(
+        ["docker", "version", "--format", "{{.Server.Version}}"]
+    )
+    compose_version = run_command(
+        ["docker", "compose", "version", "--short"]
+    )
+    info_output = run_command(["docker", "info", "--format", "{{json .}}"])
+    docker_cpu_count = None
+    docker_memory_bytes = None
+    if info_output is not None:
+        try:
+            info = json.loads(info_output)
+            docker_cpu_count = info.get("NCPU")
+            docker_memory_bytes = info.get("MemTotal")
+        except (TypeError, ValueError):
+            pass
+
+    return {
+        "testDateUtc": datetime.now(timezone.utc).isoformat(),
+        "hardware": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "cpuCount": os.cpu_count(),
+        },
+        "docker": {
+            "serverVersion": server_version,
+            "composeVersion": compose_version,
+            "cpuCount": docker_cpu_count,
+            "memoryBytes": docker_memory_bytes,
+        },
+    }
+
+
 def read_cache_stats(base_url, ops_key, tenant_ids):
     headers = {"X-Ops-Key": ops_key}
     totals = {"hits": 0, "misses": 0}
@@ -40,6 +92,18 @@ def read_cache_stats(base_url, ops_key, tenant_ids):
         totals["misses"] += data["misses"]
 
     return totals
+
+
+def read_predicted_warming_events(base_url, ops_key, tenant_id):
+    response = requests.get(
+        base_url + "/api/dashboard/warming-events",
+        headers={"X-Ops-Key": ops_key},
+        params={"tenantId": tenant_id, "limit": 50},
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    events = response.json()
+    return sum(1 for event in events if event.get("type") == "predicted")
 
 
 def set_warming(base_url, ops_key, enabled):
@@ -148,9 +212,21 @@ def main():
                     args.base_url, ops_key, tenant_ids
                 )
 
+                warming_before = None
+                try:
+                    warming_before = sum(
+                        read_predicted_warming_events(
+                            args.base_url, ops_key, tenant_id
+                        )
+                        for tenant_id in tenant_ids
+                    )
+                except requests.exceptions.RequestException:
+                    pass
+
                 label = "{0}-r{1}".format(mode, repeat)
                 output_path = os.path.join(runs_dir, label + ".json")
                 simulator_path = os.path.join(simulator_dir, "simulator.py")
+                started_at_utc = datetime.now(timezone.utc).isoformat()
                 completed = subprocess.run(
                     [
                         sys.executable,
@@ -166,6 +242,7 @@ def main():
                     cwd=repo_root,
                     env=os.environ.copy(),
                 )
+                completed_at_utc = datetime.now(timezone.utc).isoformat()
                 if completed.returncode != 0:
                     print("simulator run failed: " + label)
                     return 1
@@ -174,15 +251,38 @@ def main():
                     args.base_url, ops_key, tenant_ids
                 )
 
+                warming_events = None
+                if warming_before is not None:
+                    try:
+                        warming_after = sum(
+                            read_predicted_warming_events(
+                                args.base_url, ops_key, tenant_id
+                            )
+                            for tenant_id in tenant_ids
+                        )
+                        warming_events = max(
+                            0, warming_after - warming_before
+                        )
+                    except requests.exceptions.RequestException:
+                        pass
+
                 with open(output_path, "r", encoding="utf-8") as input_file:
                     simulator_result = json.load(input_file)
 
                 run = {
                     "mode": mode,
                     "repeat": repeat,
+                    "startedAtUtc": started_at_utc,
+                    "completedAtUtc": completed_at_utc,
                     "served": simulator_result["served"],
                     "hits": after["hits"] - before["hits"],
                     "misses": after["misses"] - before["misses"],
+                    "warmingEvents": warming_events,
+                    "originCalls": (
+                        None
+                        if warming_events is None
+                        else after["misses"] - before["misses"] + warming_events
+                    ),
                     "p99Ms": simulator_result["p99Ms"],
                     "maxMs": simulator_result["maxMs"],
                     "slowCalls": simulator_result["slowCalls"],
@@ -192,7 +292,8 @@ def main():
                 runs.append(run)
                 print(
                     "{0}/{1} {2} r{3}: served={4}, hits={5}, misses={6}, "
-                    "p99Ms={7}, refused={8}, errors={9}".format(
+                    "warmingEvents={7}, originCalls={8}, p99Ms={9}, "
+                    "refused={10}, errors={11}".format(
                         run_number,
                         total_runs,
                         mode,
@@ -200,6 +301,8 @@ def main():
                         run["served"],
                         run["hits"],
                         run["misses"],
+                        run["warmingEvents"],
+                        run["originCalls"],
                         run["p99Ms"],
                         run["refused"],
                         run["errors"],
@@ -234,6 +337,7 @@ def main():
     benchmark = {
         "off": medians["off"],
         "on": medians["on"],
+        **collect_environment_metadata(repo_root),
         "repeats": args.repeats,
         "tenantsPerRun": args.tenants_per_run,
         "durationSeconds": args.duration,
