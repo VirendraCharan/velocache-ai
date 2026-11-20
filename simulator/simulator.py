@@ -8,7 +8,6 @@ import requests
 
 
 INTERVAL_SECONDS = 2
-SPIKE_SEND_INTERVAL_SECONDS = 0.8
 SPIKE_INTERVAL_SECONDS = 300
 SPIKE_DURATION_SECONDS = 120
 REQUEST_TIMEOUT_SECONDS = 10
@@ -66,16 +65,27 @@ def read_data(tenant_id, token, endpoint):
     return response.status_code, elapsed_ms
 
 
-def is_spike_time(elapsed_seconds):
-    position_in_cycle = elapsed_seconds % SPIKE_INTERVAL_SECONDS
-    return position_in_cycle < SPIKE_DURATION_SECONDS
+def is_spike_time(elapsed_seconds, burst_duration, spike_interval):
+    position_in_cycle = elapsed_seconds % spike_interval
+    return position_in_cycle < burst_duration
 
 
 def empty_results():
     return {"latencies": [], "refused": 0, "errors": 0}
 
 
-def run_tenant(tenant, dev_secret, start_time, duration_seconds, results):
+def run_tenant(
+    tenant,
+    dev_secret,
+    start_time,
+    duration_seconds,
+    burst_duration,
+    burst_interval,
+    spike_interval,
+    quiet_interval,
+    endpoint,
+    results,
+):
     tenant_results = empty_results()
     token = get_token(dev_secret, tenant)
     if token is None:
@@ -85,7 +95,11 @@ def run_tenant(tenant, dev_secret, start_time, duration_seconds, results):
 
     while time.time() - start_time < duration_seconds:
         elapsed = time.time() - start_time
-        currently_spiking = is_spike_time(elapsed)
+        currently_spiking = is_spike_time(
+            elapsed,
+            burst_duration,
+            spike_interval,
+        )
 
         status = send_traffic(tenant, token, "/simulated/" + tenant)
         if status is None:
@@ -97,7 +111,7 @@ def run_tenant(tenant, dev_secret, start_time, duration_seconds, results):
         print(tenant, status, "SPIKE" if currently_spiking else "calm")
 
         if currently_spiking:
-            read_status, read_ms = read_data(tenant, token, "/api/data")
+            read_status, read_ms = read_data(tenant, token, endpoint)
             print(
                 tenant,
                 "data",
@@ -112,9 +126,7 @@ def run_tenant(tenant, dev_secret, start_time, duration_seconds, results):
             else:
                 tenant_results["errors"] += 1
 
-        time.sleep(
-            SPIKE_SEND_INTERVAL_SECONDS if currently_spiking else INTERVAL_SECONDS
-        )
+        time.sleep(burst_interval if currently_spiking else quiet_interval)
 
     results[tenant] = tenant_results
 
@@ -148,8 +160,18 @@ def main():
     parser.add_argument("label", nargs="?", default="run")
     parser.add_argument("--tenants", default="tenant-a")
     parser.add_argument("--duration", type=int, default=900)
+    parser.add_argument("--burst-size", type=int, default=150)
+    parser.add_argument("--burst-duration", type=int, default=120)
+    parser.add_argument("--endpoint", default="/api/data")
+    parser.add_argument("--spike-interval", type=int, default=SPIKE_INTERVAL_SECONDS)
+    parser.add_argument("--quiet-interval", type=float, default=INTERVAL_SECONDS)
     parser.add_argument("--out")
     args = parser.parse_args()
+    if args.burst_size < 1:
+        parser.error("--burst-size must be at least 1")
+    if args.burst_duration < 1:
+        parser.error("--burst-duration must be at least 1")
+    burst_interval = args.burst_duration / args.burst_size
 
     tenants = [tenant.strip() for tenant in args.tenants.split(",") if tenant.strip()]
     start_time = time.time()
@@ -157,7 +179,18 @@ def main():
     threads = [
         threading.Thread(
             target=run_tenant,
-            args=(tenant, dev_secret, start_time, args.duration, results),
+            args=(
+                tenant,
+                dev_secret,
+                start_time,
+                args.duration,
+                args.burst_duration,
+                burst_interval,
+                args.spike_interval,
+                args.quiet_interval,
+                args.endpoint,
+                results,
+            ),
         )
         for tenant in tenants
     ]
@@ -198,6 +231,11 @@ def main():
             "label": args.label,
             "tenants": tenants,
             "durationSeconds": args.duration,
+            "endpoint": args.endpoint,
+            "burstSize": args.burst_size,
+            "burstDurationSeconds": args.burst_duration,
+            "spikeIntervalSeconds": args.spike_interval,
+            "burstIntervalSeconds": round(burst_interval, 3),
             **combined_summary,
             "perTenant": summaries,
         }
